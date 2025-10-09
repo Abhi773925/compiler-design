@@ -7,7 +7,7 @@ import { Spotlight } from "../ui/BackgroundEffects"
 import { useTheme } from "../../context/ThemeContext"
 import { useAuth } from "../../context/AuthContext"
 import { io } from "socket.io-client"
-import { Tldraw, track, useEditor } from "tldraw"
+import { Tldraw } from "tldraw"
 import "tldraw/tldraw.css"
 
 const Compiler = ({ roomId, userName }) => {
@@ -40,11 +40,13 @@ const Compiler = ({ roomId, userName }) => {
   const [typingUsers, setTypingUsers] = useState(new Set()) // Set of userIds who are typing
   const [showFullscreenWhiteboard, setShowFullscreenWhiteboard] = useState(false) // Toggle fullscreen whiteboard
   const [tldrawEditor, setTldrawEditor] = useState(null) // tldraw editor instance
+  const tldrawUnsubRef = useRef(null)
+  const whiteboardOpenedByOthers = useRef(true) // Track if whiteboard was opened by another user
+  const isApplyingRemoteRef = useRef(false)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const socketRef = useRef(null)
   const isRemoteChange = useRef(false)
-  const isRemoteWhiteboardChange = useRef(false) // Prevent echo for whiteboard
   const languageRef = useRef(language) // Add ref for language
   const roomIdRef = useRef(roomId) // Add ref for roomId
   const peerConnections = useRef({})
@@ -675,10 +677,12 @@ const Compiler = ({ roomId, userName }) => {
     if (!socketRef.current || !roomIdRef.current || !tldrawEditor) {
       return
     }
+    // Prevent infinite loop if changes are applied locally and broadcasted
+    if (isApplyingRemoteRef.current) return
 
     // Get current drawing data from tldraw
     const snapshot = tldrawEditor.store.getSnapshot()
-    
+
     // Broadcast to other users
     socketRef.current.emit("whiteboardChange", {
       roomId: roomIdRef.current,
@@ -689,7 +693,12 @@ const Compiler = ({ roomId, userName }) => {
   // Apply remote whiteboard changes
   const applyRemoteWhiteboardChange = (snapshot) => {
     if (tldrawEditor && snapshot) {
-      tldrawEditor.store.loadSnapshot(snapshot)
+      isApplyingRemoteRef.current = true
+      try {
+        tldrawEditor.store.loadSnapshot(snapshot)
+      } finally {
+        isApplyingRemoteRef.current = false
+      }
     }
   }
 
@@ -705,6 +714,23 @@ const Compiler = ({ roomId, userName }) => {
     if (socketRef.current && roomId) {
       socketRef.current.emit("userStoppedTyping", { roomId })
     }
+  }
+console.log("white");
+  // Open whiteboard for all users
+  const openWhiteboardForAll = () => {
+    setShowFullscreenWhiteboard(true)
+    if (socketRef.current && roomId) {
+      socketRef.current.emit("whiteboardOpened", { roomId })
+    }
+  }
+
+  // Close whiteboard for all users
+  const closeWhiteboardForAll = () => {
+    setShowFullscreenWhiteboard(false)
+    if (socketRef.current && roomId && !whiteboardOpenedByOthers.current) {
+      socketRef.current.emit("whiteboardClosed", { roomId })
+    }
+    whiteboardOpenedByOthers.current = false
   }
 
   // Start screen share
@@ -979,13 +1005,28 @@ const Compiler = ({ roomId, userName }) => {
     })
 
     // Handle whiteboard changes
-    socketRef.current.on("whiteboardUpdate", ({ elements }) => {
-      console.log("Whiteboard update received:", elements)
-      isRemoteWhiteboardChange.current = true
-      setExcalidrawElements(elements)
-      if (excalidrawAPI) {
-        excalidrawAPI.updateScene({ elements })
-      }
+    socketRef.current.on("whiteboardUpdate", ({ snapshot }) => {
+      console.log("Whiteboard update received:", snapshot)
+      applyRemoteWhiteboardChange(snapshot)
+    })
+
+    // Handle whiteboard opened by another user
+    socketRef.current.on("whiteboardOpenedByUser", ({ userName }) => {
+      console.log(`${userName} opened the whiteboard`)
+      whiteboardOpenedByOthers.current = true
+      setShowFullscreenWhiteboard(true)
+      setOutput(`${userName} opened the whiteboard`)
+      setShowOutput(true)
+      setTimeout(() => setShowOutput(false), 3000)
+    })
+
+    // Handle whiteboard closed by another user
+    socketRef.current.on("whiteboardClosedByUser", ({ userName }) => {
+      console.log(`${userName} closed the whiteboard`)
+      setShowFullscreenWhiteboard(false)
+      setOutput(`${userName} closed the whiteboard`)
+      setShowOutput(true)
+      setTimeout(() => setShowOutput(false), 3000)
     })
 
     // Handle typing indicators
@@ -1109,6 +1150,10 @@ const Compiler = ({ roomId, userName }) => {
       }
       if (screenStream) {
         screenStream.getTracks().forEach((track) => track.stop())
+      }
+      if (tldrawUnsubRef.current) {
+        tldrawUnsubRef.current()
+        tldrawUnsubRef.current = null
       }
     }
   }, [roomId, userName, localStream, screenStream, editorReady])
@@ -1257,6 +1302,30 @@ const Compiler = ({ roomId, userName }) => {
 
     return () => clearTimeout(saveTimer)
   }, [code, language, roomId])
+
+  // Effect to set up whiteboard listener when editor is ready
+  useEffect(() => {
+    if (tldrawEditor && socketRef.current && roomId) {
+      const handleChange = () => {
+        handleWhiteboardChange()
+      }
+
+      // Debounce changes to avoid too many socket emissions
+      let changeTimeout
+      const unsubscribe = tldrawEditor.store.listen(() => {
+        clearTimeout(changeTimeout)
+        changeTimeout = setTimeout(handleChange, 300)
+      })
+      tldrawUnsubRef.current = unsubscribe
+    }
+
+    return () => {
+      if (tldrawUnsubRef.current) {
+        tldrawUnsubRef.current()
+        tldrawUnsubRef.current = null
+      }
+    }
+  }, [tldrawEditor, socketRef.current, roomId])
 
   return (
     <div className="flex h-screen bg-white dark:bg-black text-gray-900 dark:text-white overflow-hidden relative z-10">
@@ -1435,9 +1504,9 @@ const Compiler = ({ roomId, userName }) => {
 
           {/* Whiteboard Tab */}
           <button
-            onClick={() => setActiveTab(activeTab === "whiteboard" ? null : "whiteboard")}
-            className={`p-2.5 md:p-3 ${activeTab === "whiteboard" ? "bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400" : "hover:bg-orange-100 dark:hover:bg-orange-900/20 text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400"} rounded-lg mb-3 md:mb-4 transition-all duration-200 hover:scale-105`}
-            title="Whiteboard"
+            onClick={openWhiteboardForAll}
+            className="p-2.5 md:p-3 hover:bg-orange-100 dark:hover:bg-orange-900/20 text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 rounded-lg mb-3 md:mb-4 transition-all duration-200 hover:scale-105"
+            title="Whiteboard (Fullscreen)"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1757,22 +1826,7 @@ const Compiler = ({ roomId, userName }) => {
                   </div>
                 )}
 
-                {/* Whiteboard Tab Content */}
-                {activeTab === "whiteboard" && (
-                  <div className="h-[calc(100vh-200px)] w-full">
-                    <Excalidraw
-                      initialData={{
-                        elements: excalidrawElements,
-                        appState: {
-                          viewBackgroundColor: appTheme === "dark" ? "#1f2937" : "#ffffff",
-                        },
-                      }}
-                      onChange={handleWhiteboardChange}
-                      excalidrawAPI={(api) => setExcalidrawAPI(api)}
-                      theme={appTheme === "dark" ? "dark" : "light"}
-                    />
-                  </div>
-                )}
+                {/* Whiteboard Tab Content - Removed, now opens in fullscreen */}
 
                 {/* Video Tab Content */}
                 {activeTab === "video" && (
@@ -2602,6 +2656,110 @@ const Compiler = ({ roomId, userName }) => {
                   </button>
                 </div>
               </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Whiteboard Modal */}
+      <AnimatePresence>
+        {showFullscreenWhiteboard && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-95 z-50"
+            />
+
+            {/* Fullscreen Whiteboard Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 flex flex-col"
+            >
+              {/* Toolbar */}
+              <div className="bg-gray-900 border-b border-gray-700 p-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-orange-500"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="8" y1="21" x2="16" y2="21"></line>
+                      <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    <h2 className="text-white font-semibold text-lg">Collaborative Whiteboard</h2>
+                  </div>
+                  {roomId && (
+                    <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">Room: {roomId}</span>
+                  )}
+                </div>
+
+                <button
+                  onClick={closeWhiteboardForAll}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                  <span>Close Whiteboard</span>
+                </button>
+              </div>
+
+              {/* Tldraw Canvas */}
+              <div className="flex-1 w-full h-full">
+                <Tldraw
+                  onMount={(editor) => {
+                    setTldrawEditor(editor)
+
+                    // if an old listener exists, clean it up before reattaching
+                    if (tldrawUnsubRef.current) {
+                      tldrawUnsubRef.current()
+                      tldrawUnsubRef.current = null
+                    }
+
+                    const handleChange = () => {
+                      handleWhiteboardChange()
+                    }
+
+                    let changeTimeout
+                    const off = editor.store.listen(() => {
+                      clearTimeout(changeTimeout)
+                      changeTimeout = setTimeout(handleChange, 300)
+                    })
+
+                    // store unsubscribe that also clears any pending timeout
+                    tldrawUnsubRef.current = () => {
+                      off()
+                      if (changeTimeout) clearTimeout(changeTimeout)
+                    }
+                  }}
+                />
+              </div>
             </motion.div>
           </>
         )}

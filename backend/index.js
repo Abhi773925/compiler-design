@@ -284,15 +284,15 @@ io.on("connection", (socket) => {
   });
 
   // Handle whiteboard changes
-  socket.on("whiteboardChange", async ({ roomId, elements }) => {
+  socket.on("whiteboardChange", async ({ roomId, snapshot }) => {
     // Broadcast to other users in the room
-    socket.to(roomId).emit("whiteboardUpdate", { elements });
+    socket.to(roomId).emit("whiteboardUpdate", { snapshot });
 
     // Save whiteboard state to database
     try {
       const session = await Session.findOne({ roomId });
       if (session) {
-        session.whiteboardElements = elements;
+        session.whiteboardElements = snapshot;
         session.lastActivity = new Date();
         await session.save();
         console.log("Whiteboard state saved to database");
@@ -300,6 +300,24 @@ io.on("connection", (socket) => {
     } catch (error) {
       console.error("Error saving whiteboard state:", error);
     }
+  });
+
+  // Handle whiteboard opened - broadcast to all users in room
+  socket.on("whiteboardOpened", ({ roomId }) => {
+    socket.to(roomId).emit("whiteboardOpenedByUser", {
+      userId: socket.id,
+      userName: socket.userName,
+    });
+    console.log(`${socket.userName} opened whiteboard in room: ${roomId}`);
+  });
+
+  // Handle whiteboard closed - broadcast to all users in room
+  socket.on("whiteboardClosed", ({ roomId }) => {
+    socket.to(roomId).emit("whiteboardClosedByUser", {
+      userId: socket.id,
+      userName: socket.userName,
+    });
+    console.log(`${socket.userName} closed whiteboard in room: ${roomId}`);
   });
 
   // Handle user ready for screen share (initiates peer connections if needed)

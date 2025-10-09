@@ -64,6 +64,7 @@ const Navbar = () => {
             >
               <Link to="/" className="flex items-center">
                 <img src={prepmate} className="h-[40px] w-[30px]"></img>
+                <span>PrepMate</span>
               </Link>
             </motion.div>
 

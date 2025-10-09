@@ -117,11 +117,21 @@ const Navbar = () => {
                     className="flex items-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                   >
-                    <img
-                      src={user.picture}
-                      alt={user.name}
-                      className="h-8 w-8 rounded-full border-2 border-orange-500"
-                    />
+                    {user.picture ? (
+                      <img
+                        src={user.picture}
+                        alt={user.name}
+                        className="h-8 w-8 rounded-full border-2 border-orange-500"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.name) + "&background=orange&color=fff";
+                        }}
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full border-2 border-orange-500 bg-orange-400 flex items-center justify-center text-white font-medium">
+                        {user.name?.charAt(0) || "U"}
+                      </div>
+                    )}
                     <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
                       {user.name?.split(" ")[0]}
                     </span>
@@ -146,11 +156,21 @@ const Navbar = () => {
                         {/* User Info Section */}
                         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                           <div className="flex items-center space-x-3">
-                            <img
-                              src={user.picture}
-                              alt={user.name}
-                              className="h-10 w-10 rounded-full"
-                            />
+                            {user.picture ? (
+                              <img
+                                src={user.picture}
+                                alt={user.name}
+                                className="h-10 w-10 rounded-full"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.name) + "&background=orange&color=fff";
+                                }}
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full bg-orange-400 flex items-center justify-center text-white font-medium">
+                                {user.name?.charAt(0) || "U"}
+                              </div>
+                            )}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                                 {user.name}
@@ -260,11 +280,21 @@ const Navbar = () => {
                   <div className="space-y-2">
                     {/* User Info */}
                     <div className="flex items-center space-x-3 px-3 py-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <img
-                        src={user.picture}
-                        alt={user.name}
-                        className="h-10 w-10 rounded-full border-2 border-orange-500"
-                      />
+                      {user.picture ? (
+                        <img
+                          src={user.picture}
+                          alt={user.name}
+                          className="h-10 w-10 rounded-full border-2 border-orange-500"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.name) + "&background=orange&color=fff";
+                          }}
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full border-2 border-orange-500 bg-orange-400 flex items-center justify-center text-white font-medium">
+                          {user.name?.charAt(0) || "U"}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {user.name}

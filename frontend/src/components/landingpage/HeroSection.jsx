@@ -9,7 +9,7 @@ import {
   Terminal,
   GitBranch,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { TypewriterEffect } from "../ui/TextEffects";
 import { Button } from "../ui/Button";
 import { Spotlight } from "../ui/BackgroundEffects";
@@ -75,7 +75,10 @@ const HeroSection = () => {
       description: "LeetCode-style problems with test cases",
     },
   ];
-
+  const navigate = useNavigate();
+  const handlenavigate = () => {
+    navigate('/compiler');
+  }
   return (
     <>
       <div className="min-h-screen bg-white dark:bg-black relative overflow-hidden">
@@ -130,7 +133,7 @@ const HeroSection = () => {
                 variant="outline"
                 size="lg"
                 className="border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white px-8 py-3 text-base font-medium rounded-lg transition-all duration-200 dark:border-orange-400 dark:text-orange-400 dark:hover:bg-orange-400 dark:hover:text-black"
-                onClick={() => setAuthModalOpen(true)}
+                onClick={handlenavigate}
               >
                 Start Collaborating
                 <Users className="ml-2 h-4 w-4" />

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -13,6 +13,9 @@ import LandingPage from "./pages/LandingPage";
 import EditorPage from "./pages/EditorPage";
 import AuthModal from "./components/auth/AuthModal";
 import "./App.css";
+
+// Lazy-load the Compiler component
+const Compiler = React.lazy(() => import('./components/collaboration/Compiler'));
 
 // Get Google OAuth Client ID from environment variables
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "767738565159-917go1fi4liv39t8m209euifatmk7l53.apps.googleusercontent.com";
@@ -29,6 +32,11 @@ function App() {
               <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/editor" element={<EditorPage />} />
+                <Route path="/compiler" element={
+                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+                    <Compiler />
+                  </Suspense>
+                } />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
 

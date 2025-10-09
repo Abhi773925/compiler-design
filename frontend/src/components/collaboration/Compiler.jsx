@@ -910,7 +910,7 @@ console.log("white");
     // Join the room with userId
     socketRef.current.emit("joinRoom", {
       roomId,
-      userName,
+      userName:user?.name || userName || "Anonymous",
       userId: user?._id || user?.id || null,
     })
 

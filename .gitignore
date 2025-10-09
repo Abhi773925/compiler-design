@@ -4,8 +4,8 @@
 .env.development.local
 .env.test.local
 .env.production.local
-backend/.env
-frontend/.env
+backend/.env.example
+frontend/.env.example
 
 # Dependencies
 node_modules/
@@ -19,7 +19,6 @@ build/
 dist/
 */build/
 */dist/
-
 # Runtime data
 pids
 *.pid

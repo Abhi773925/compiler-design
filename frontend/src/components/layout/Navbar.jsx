@@ -63,7 +63,7 @@ const Navbar = () => {
               transition={{ type: "spring", stiffness: 400, damping: 10 }}
             >
               <Link to="/" className="flex items-center">
-                <img src={prepmate} className="h-[50px] w-[30px]"></img>
+                <img src={prepmate} className="h-[60px] w-[30px]"></img>
               </Link>
             </motion.div>
 

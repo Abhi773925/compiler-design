@@ -14,14 +14,9 @@ import EditorPage from "./pages/EditorPage";
 import PracticePage from "./pages/PracticePage";
 import ProblemSolver from "./pages/ProblemSolver";
 import ProfilePage from "./pages/ProfilePage";
+import CollaborationPage from "./pages/CollaborationPage";
 import AuthModal from "./components/auth/AuthModal";
 import "./App.css";
-
-// Lazy-load the Compiler component
-const Compiler = React.lazy(() =>
-  import("./components/collaboration/Compiler")
-);
-
 // Get Google OAuth Client ID from environment variables
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -42,20 +37,7 @@ function App() {
                 <Route path="/practice" element={<PracticePage />} />
                 <Route path="/practice/:slug" element={<ProblemSolver />} />
                 <Route path="/profile" element={<ProfilePage />} />
-                <Route
-                  path="/compiler"
-                  element={
-                    <Suspense
-                      fallback={
-                        <div className="min-h-screen flex items-center justify-center">
-                          Loading...
-                        </div>
-                      }
-                    >
-                      <Compiler />
-                    </Suspense>
-                  }
-                />
+                <Route path="/compiler" element={<CollaborationPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
 

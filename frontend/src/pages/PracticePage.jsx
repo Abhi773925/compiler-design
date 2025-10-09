@@ -22,7 +22,7 @@ const PracticePage = () => {
 
   const fetchProblems = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/problems");
+      const response = await fetch("https://compiler-design.onrender.com/api/problems");
       const data = await response.json();
       setProblems(data);
     } catch (error) {

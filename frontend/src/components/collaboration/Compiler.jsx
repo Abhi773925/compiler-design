@@ -860,7 +860,7 @@ console.log("white");
     if (!roomId) return
 
     // Connect to Socket.IO server
-    const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
+    const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com"
     socketRef.current = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
     })
@@ -1283,7 +1283,7 @@ console.log("white");
 
     const saveTimer = setTimeout(async () => {
       try {
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com"
         await fetch(`${BACKEND_URL}/api/sessions/${roomId}/update`, {
           method: "POST",
           headers: {

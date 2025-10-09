@@ -102,7 +102,7 @@ Each session stores:
 ## Environment Variables
 Make sure your `.env` file has:
 ```
-VITE_BACKEND_URL=http://localhost:5000
+VITE_BACKEND_URL=https://compiler-design.onrender.com
 ```
 
 ## Installation

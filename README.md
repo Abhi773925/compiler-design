@@ -113,7 +113,7 @@ PrepMate is a modern collaborative coding platform designed for technical interv
    npm run dev
    ```
 
-   Backend will run on `http://localhost:5000`
+   Backend will run on `https://compiler-design.onrender.com`
 
 2. **Start the Frontend**
 

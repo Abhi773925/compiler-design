@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
         try {
           console.log("Validating 1-week JWT token on page load...");
           // Verify token with backend
-          const response = await fetch("http://localhost:5000/api/auth/me", {
+          const response = await fetch("https://compiler-design.onrender.com/api/auth/me", {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }) => {
 
     try {
       console.log("Refreshing JWT token for extended 1-week session...");
-      const response = await fetch("http://localhost:5000/api/auth/refresh", {
+      const response = await fetch("https://compiler-design.onrender.com/api/auth/refresh", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

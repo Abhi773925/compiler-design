@@ -227,7 +227,7 @@ Reset isRemoteChange = false
 ### Environment Variables:
 ```env
 # Frontend (.env)
-VITE_BACKEND_URL=http://localhost:5000
+VITE_BACKEND_URL=https://compiler-design.onrender.com
 VITE_GOOGLE_CLIENT_ID=<your-google-client-id>
 ```
 

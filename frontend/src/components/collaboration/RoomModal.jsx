@@ -23,7 +23,7 @@ const RoomModal = ({ isOpen, onClose, onCreateRoom, onJoinRoom }) => {
   const fetchRecentSessions = async () => {
     setLoadingSessions(true);
     try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com";
       const response = await fetch(`${BACKEND_URL}/api/sessions/user/${user._id || user.id}`);
       
       if (response.ok) {

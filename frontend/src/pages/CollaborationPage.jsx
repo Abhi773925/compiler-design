@@ -23,7 +23,7 @@ const CollaborationPage = () => {
 
   const createSessionInDatabase = async (roomId, userName) => {
     try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com";
       const response = await fetch(`${BACKEND_URL}/api/sessions/create`, {
         method: "POST",
         headers: {

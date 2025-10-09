@@ -93,7 +93,7 @@ public class Solution {
   const fetchProblem = async () => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/problems/${slug}`
+        `https://compiler-design.onrender.com/api/problems/${slug}`
       );
       const data = await response.json();
       setProblem(data);
@@ -125,7 +125,7 @@ public class Solution {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/problems/${slug}/run`,
+        `https://compiler-design.onrender.com/api/problems/${slug}/run`,
         {
           method: "POST",
           headers: {
@@ -177,7 +177,7 @@ public class Solution {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/problems/${slug}/submit`,
+        `https://compiler-design.onrender.com/api/problems/${slug}/submit`,
         {
           method: "POST",
           headers: {

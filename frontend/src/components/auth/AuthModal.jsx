@@ -16,7 +16,7 @@ const AuthModal = ({ isOpen, onClose }) => {
       console.log("Sending Google credential to backend...");
 
       // Send the Google credential to our backend
-      const response = await fetch("http://localhost:5000/api/auth/google", {
+      const response = await fetch("https://compiler-design.onrender.com/api/auth/google", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

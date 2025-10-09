@@ -14,9 +14,8 @@ import EditorPage from "./pages/EditorPage";
 import AuthModal from "./components/auth/AuthModal";
 import "./App.css";
 
-// Replace with your actual Google OAuth Client ID
-const GOOGLE_CLIENT_ID =
-  "767738565159-917go1fi4liv39t8m209euifatmk7l53.apps.googleusercontent.com";
+// Get Google OAuth Client ID from environment variables
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "767738565159-917go1fi4liv39t8m209euifatmk7l53.apps.googleusercontent.com";
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);

@@ -153,7 +153,7 @@ const RoomModal = ({ isOpen, onClose, onCreateRoom, onJoinRoom }) => {
                           {recentSessions.map((session) => (
                             <motion.div
                               key={session.roomId}
-                              whileHover={{ scale: 1.01 }}
+                             
                               onClick={() => onJoinRoom(session.roomId, userName)}
                               className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:border-orange-500 dark:hover:border-orange-400 transition-colors"
                             >

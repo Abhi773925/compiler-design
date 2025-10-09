@@ -31,6 +31,70 @@ router.get("/profile/:id", auth, async (req, res) => {
   }
 });
 
+// Get detailed user profile with solved problems
+router.get("/profile", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId)
+      .select("-googleId -__v")
+      .populate({
+        path: "problemsSolved.problemId",
+        select: "title difficulty slug",
+      });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Group solved problems by difficulty
+    const solvedProblems = {
+      easy: [],
+      medium: [],
+      hard: [],
+    };
+
+    user.problemsSolved.forEach((solved) => {
+      if (solved.problemId) {
+        const problem = {
+          id: solved.problemId._id,
+          title: solved.problemId.title,
+          difficulty: solved.problemId.difficulty,
+          slug: solved.problemId.slug,
+          solvedAt: solved.solvedAt,
+          language: solved.language,
+        };
+
+        solvedProblems[solved.problemId.difficulty.toLowerCase()].push(problem);
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      profile: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          picture: user.picture,
+          role: user.role,
+          preferences: user.preferences,
+          stats: user.stats,
+          createdAt: user.createdAt,
+        },
+        solvedProblems,
+      },
+    });
+  } catch (error) {
+    console.error("Get detailed user profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
 // Update user profile
 router.patch("/profile", auth, async (req, res) => {
   try {

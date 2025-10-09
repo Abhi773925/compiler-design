@@ -10,13 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@react-oauth/google": "^0.12.1",
+    "axios": "^1.12.2",
     "clsx": "^2.1.1",
+    "codemirror": "^5.65.20",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
+    "react-codemirror2": "^8.0.1",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
+    "react-resizable-panels": "^3.0.6",
     "react-router-dom": "^6.22.0",
     "tailwind-merge": "^2.6.0"
   },

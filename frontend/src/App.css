@@ -31,10 +31,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
+  background-color: white;
+  transition: background-color 0.3s ease;
+}
+
+.dark body {
+  background-color: black;
 }
 
 .App {
   min-height: 100vh;
+  background-color: inherit;
 }
 
 /* Custom animations */

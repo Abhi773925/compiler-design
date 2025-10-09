@@ -11,14 +11,21 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import LandingPage from "./pages/LandingPage";
 import EditorPage from "./pages/EditorPage";
+import PracticePage from "./pages/PracticePage";
+import ProblemSolver from "./pages/ProblemSolver";
+import ProfilePage from "./pages/ProfilePage";
 import AuthModal from "./components/auth/AuthModal";
 import "./App.css";
 
 // Lazy-load the Compiler component
-const Compiler = React.lazy(() => import('./components/collaboration/Compiler'));
+const Compiler = React.lazy(() =>
+  import("./components/collaboration/Compiler")
+);
 
 // Get Google OAuth Client ID from environment variables
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "767738565159-917go1fi4liv39t8m209euifatmk7l53.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  "767738565159-917go1fi4liv39t8m209euifatmk7l53.apps.googleusercontent.com";
 
 function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -32,11 +39,23 @@ function App() {
               <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/editor" element={<EditorPage />} />
-                <Route path="/compiler" element={
-                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-                    <Compiler />
-                  </Suspense>
-                } />
+                <Route path="/practice" element={<PracticePage />} />
+                <Route path="/practice/:slug" element={<ProblemSolver />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route
+                  path="/compiler"
+                  element={
+                    <Suspense
+                      fallback={
+                        <div className="min-h-screen flex items-center justify-center">
+                          Loading...
+                        </div>
+                      }
+                    >
+                      <Compiler />
+                    </Suspense>
+                  }
+                />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
 

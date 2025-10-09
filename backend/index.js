@@ -11,6 +11,7 @@ require("dotenv").config();
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const projectRoutes = require("./routes/projects");
+const problemRoutes = require("./routes/problems");
 
 const app = express();
 const server = createServer(app);
@@ -63,6 +64,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/problems", problemRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

@@ -1,0 +1,121 @@
+/* CodeMirror Custom Styles for PrepMate */
+
+/* Ensure CodeMirror takes full height */
+.codemirror-wrapper {
+  height: 100%;
+  width: 100%;
+}
+
+.codemirror-wrapper .CodeMirror {
+  height: 100% !important;
+  font-family: "JetBrains Mono", "Fira Code", "Monaco", "Menlo", "Ubuntu Mono",
+    monospace !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  border: none !important;
+}
+
+.codemirror-wrapper .CodeMirror-scroll {
+  padding: 16px !important;
+  min-height: 100% !important;
+}
+
+/* Dark theme support */
+.dark .codemirror-wrapper .CodeMirror {
+  background: #0f1419 !important;
+  color: #bfbdb6 !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-gutters {
+  background: #1a202c !important;
+  border-right: 1px solid #2d3748 !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-linenumber {
+  color: #718096 !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-activeline-background {
+  background: #2d3748 !important;
+}
+
+/* Light theme support */
+.codemirror-wrapper .CodeMirror {
+  background: #ffffff !important;
+  color: #24292e !important;
+}
+
+.codemirror-wrapper .CodeMirror-gutters {
+  background: #f7fafc !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+.codemirror-wrapper .CodeMirror-linenumber {
+  color: #a0aec0 !important;
+}
+
+.codemirror-wrapper .CodeMirror-activeline-background {
+  background: #f7fafc !important;
+}
+
+/* Orange cursor */
+.codemirror-wrapper .CodeMirror-cursor {
+  border-left: 2px solid #f97316 !important;
+}
+
+/* Selection colors */
+.codemirror-wrapper .CodeMirror-selected {
+  background: #bee3f8 !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-selected {
+  background: #4a5568 !important;
+}
+
+.codemirror-wrapper .CodeMirror-focused .CodeMirror-selected {
+  background: #90cdf4 !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-focused .CodeMirror-selected {
+  background: #2d3748 !important;
+}
+
+/* Custom scrollbar */
+.codemirror-wrapper .CodeMirror-vscrollbar::-webkit-scrollbar,
+.codemirror-wrapper .CodeMirror-hscrollbar::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.codemirror-wrapper .CodeMirror-vscrollbar::-webkit-scrollbar-track,
+.codemirror-wrapper .CodeMirror-hscrollbar::-webkit-scrollbar-track {
+  background: #f7fafc !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-vscrollbar::-webkit-scrollbar-track,
+.dark .codemirror-wrapper .CodeMirror-hscrollbar::-webkit-scrollbar-track {
+  background: #1a202c !important;
+}
+
+.codemirror-wrapper .CodeMirror-vscrollbar::-webkit-scrollbar-thumb,
+.codemirror-wrapper .CodeMirror-hscrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e0 !important;
+  border-radius: 4px !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-vscrollbar::-webkit-scrollbar-thumb,
+.dark .codemirror-wrapper .CodeMirror-hscrollbar::-webkit-scrollbar-thumb {
+  background: #4a5568 !important;
+}
+
+.codemirror-wrapper .CodeMirror-vscrollbar::-webkit-scrollbar-thumb:hover,
+.codemirror-wrapper .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0 !important;
+}
+
+.dark .codemirror-wrapper .CodeMirror-vscrollbar::-webkit-scrollbar-thumb:hover,
+.dark
+  .codemirror-wrapper
+  .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover {
+  background: #718096 !important;
+}

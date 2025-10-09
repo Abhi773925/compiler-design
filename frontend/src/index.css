@@ -12,14 +12,22 @@
 
 html {
   height: 100%;
+  background-color: white;
+  transition: background-color 0.3s ease;
+}
+
+html.dark {
+  background-color: black;
 }
 
 body {
   margin: 0;
   min-height: 100%;
+  background-color: inherit;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #root {
   min-height: 100vh;
+  background-color: inherit;
 }

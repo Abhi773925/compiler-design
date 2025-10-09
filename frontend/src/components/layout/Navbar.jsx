@@ -90,6 +90,12 @@ const Navbar = () => {
                 >
                   Editor
                 </Link>
+                <Link
+                  to="/practice"
+                  className="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  Practice
+                </Link>
               </div>
             </div>
 
@@ -124,7 +130,10 @@ const Navbar = () => {
                         className="h-8 w-8 rounded-full border-2 border-orange-500"
                         onError={(e) => {
                           e.target.onerror = null;
-                          e.target.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.name) + "&background=orange&color=fff";
+                          e.target.src =
+                            "https://ui-avatars.com/api/?name=" +
+                            encodeURIComponent(user.name) +
+                            "&background=orange&color=fff";
                         }}
                       />
                     ) : (
@@ -163,7 +172,10 @@ const Navbar = () => {
                                 className="h-10 w-10 rounded-full"
                                 onError={(e) => {
                                   e.target.onerror = null;
-                                  e.target.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.name) + "&background=orange&color=fff";
+                                  e.target.src =
+                                    "https://ui-avatars.com/api/?name=" +
+                                    encodeURIComponent(user.name) +
+                                    "&background=orange&color=fff";
                                 }}
                               />
                             ) : (
@@ -184,13 +196,14 @@ const Navbar = () => {
 
                         {/* Menu Items */}
                         <div className="py-2">
-                          <button
+                          <Link
+                            to="/profile"
                             onClick={() => setProfileDropdownOpen(false)}
                             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                           >
                             <User className="h-4 w-4 mr-3 text-gray-400" />
                             My Profile
-                          </button>
+                          </Link>
 
                           <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
 
@@ -287,7 +300,10 @@ const Navbar = () => {
                           className="h-10 w-10 rounded-full border-2 border-orange-500"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(user.name) + "&background=orange&color=fff";
+                            e.target.src =
+                              "https://ui-avatars.com/api/?name=" +
+                              encodeURIComponent(user.name) +
+                              "&background=orange&color=fff";
                           }}
                         />
                       ) : (

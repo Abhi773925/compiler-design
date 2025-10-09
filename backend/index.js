@@ -151,7 +151,7 @@ io.on("connection", (socket) => {
     }
 
     // Get all users in the room
-    const usersInRoom = roomUsers.has(roomId) 
+    const usersInRoom = roomUsers.has(roomId)
       ? Array.from(roomUsers.get(roomId).values())
       : [];
 
@@ -182,10 +182,10 @@ io.on("connection", (socket) => {
     try {
       await Session.findOneAndUpdate(
         { roomId },
-        { 
-          code, 
+        {
+          code,
           language: language || undefined,
-          lastActivity: new Date() 
+          lastActivity: new Date(),
         },
         { new: true }
       );
@@ -226,10 +226,16 @@ io.on("connection", (socket) => {
   // Handle chat messages
   socket.on("chatMessage", async ({ roomId, message }) => {
     // Handle both string and object message formats
-    const messageText = typeof message === 'string' ? message : message.message;
-    const messageUserId = typeof message === 'object' && message.userId ? message.userId : socket.id;
-    const messageUserName = typeof message === 'object' && message.userName ? message.userName : socket.userName;
-    
+    const messageText = typeof message === "string" ? message : message.message;
+    const messageUserId =
+      typeof message === "object" && message.userId
+        ? message.userId
+        : socket.id;
+    const messageUserName =
+      typeof message === "object" && message.userName
+        ? message.userName
+        : socket.userName;
+
     const messageData = {
       id: Date.now(), // Add unique ID
       message: messageText,
@@ -474,7 +480,7 @@ mongoose
   .connect(MONGODB_URI)
   .then(() => {
     console.log("Connected to MongoDB");
-    
+
     // Start cleanup job for expired sessions (runs daily at midnight)
     cron.schedule("0 0 * * *", async () => {
       try {
@@ -486,9 +492,9 @@ mongoose
         console.error("Error cleaning up expired sessions:", error);
       }
     });
-    
+
     console.log("Session cleanup job scheduled (daily at midnight)");
-    
+
     server.listen(PORT, () => {
       console.log(`PrepMate API server running on port ${PORT}`);
     });

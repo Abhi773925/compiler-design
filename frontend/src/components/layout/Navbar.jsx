@@ -16,7 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 import AuthModal from "../auth/AuthModal";
 import { cn } from "../../lib/utils";
-
+import prepmate from "../../assets/prepmate.png";
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -63,10 +63,7 @@ const Navbar = () => {
               transition={{ type: "spring", stiffness: 400, damping: 10 }}
             >
               <Link to="/" className="flex items-center">
-                <Code className="h-8 w-8 text-orange-600 dark:text-orange-400 mr-2" />
-                <span className="font-bold text-xl text-gray-900 dark:text-white">
-                  PrepMate
-                </span>
+                <img src={prepmate}></img>
               </Link>
             </motion.div>
 

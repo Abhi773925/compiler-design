@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { handleGithubCallback } from '../services/githubService';
-import { useAuth } from '../context/AuthContext';
+import { handleGithubCallback } from '../../services/githubService';
+import { useAuth } from '../../context/AuthContext';
 
 const GitHubCallback = () => {
   const [status, setStatus] = useState('Processing');

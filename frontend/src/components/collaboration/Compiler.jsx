@@ -57,6 +57,9 @@ const Compiler = ({ roomId, userName }) => {
   const languageRef = useRef(language) // Add ref for language
   const roomIdRef = useRef(roomId) // Add ref for roomId
   const peerConnections = useRef({})
+  // Shared files state
+  const [activeFileId, setActiveFileId] = useState('main.js')
+  const [files, setFiles] = useState({}) // {fileId: { name, content }}
   const localVideoRef = useRef(null)
   const screenVideoRef = useRef(null)
   const messagesEndRef = useRef(null) // For auto-scrolling chat
@@ -2531,13 +2534,42 @@ console.log("white");
       }
     })
 
-    // Listen for code updates from other users
-    socketRef.current.on("codeUpdate", ({ code: newCode, userName: senderName }) => {
-      if (monacoRef.current) {
+    // Listen for file opened in room
+    socketRef.current.on("fileOpened", ({ fileId, name }) => {
+      setFiles(prev => ({ ...prev, [fileId]: prev[fileId] || { name, content: "" } }))
+    })
+
+    // Listen for active file change in room
+    socketRef.current.on("activeFileChanged", ({ fileId }) => {
+      setActiveFileId(fileId)
+      // Request snapshot if we don't have it
+      if (!files[fileId]?.content) {
+        socketRef.current.emit("requestFile", { roomId, fileId })
+      } else if (monacoRef.current) {
         isRemoteChange.current = true
-        monacoRef.current.setValue(newCode)
-        setCode(newCode)
-        console.log(`Code updated by ${senderName}`)
+        monacoRef.current.setValue(files[fileId].content)
+        setCode(files[fileId].content)
+      }
+    })
+
+    // Receive file snapshot
+    socketRef.current.on("fileContentSnapshot", ({ fileId, name, content }) => {
+      setFiles(prev => ({ ...prev, [fileId]: { name: name || fileId, content: content || "" } }))
+      if (fileId === activeFileId && monacoRef.current) {
+        isRemoteChange.current = true
+        monacoRef.current.setValue(content || "")
+        setCode(content || "")
+      }
+    })
+
+    // Receive file content updates from others
+    socketRef.current.on("fileContentUpdate", ({ fileId, content, userName }) => {
+      setFiles(prev => ({ ...prev, [fileId]: { name: prev[fileId]?.name || fileId, content } }))
+      if (fileId === activeFileId && monacoRef.current) {
+        isRemoteChange.current = true
+        monacoRef.current.setValue(content)
+        setCode(content)
+        console.log(`File ${fileId} updated by ${userName}`)
       }
     })
 
@@ -3309,7 +3341,7 @@ console.log("white");
 
       // If there was any existing content (e.g., from session), reuse it
       const existing = monacoRef.current?.getValue?.()
-      const initialCode = typeof existing === "string" ? existing : ""
+      const initialCode = typeof existing === "string" ? existing : (files[activeFileId]?.content || "")
 
       const monacoLang = monacoLanguageMappings[languageRef.current] || languageRef.current
       const editor = window.monaco.editor.create(editorRef.current, {
@@ -3344,16 +3376,18 @@ console.log("white");
         if (!socketRef.current || !roomIdRef.current) return
         const currentValue = editor.getValue()
         setCode(currentValue)
+        // Update local files map
+        setFiles(prev => ({
+          ...prev,
+          [activeFileId]: { name: prev[activeFileId]?.name || activeFileId, content: currentValue }
+        }))
         // Avoid echo loops
         if (isRemoteChange.current) {
           isRemoteChange.current = false
           return
         }
-        socketRef.current.emit("codeChange", {
-          roomId: roomIdRef.current,
-          code: currentValue,
-          language: languageRef.current,
-        })
+        // Per-file change broadcast
+        socketRef.current.emit("changeFile", { roomId: roomIdRef.current, fileId: activeFileId, content: currentValue })
       })
     }
 
@@ -3408,6 +3442,18 @@ console.log("white");
     const editorTheme = appTheme === "dark" ? "vs-dark" : "light"
     setTheme(editorTheme)
   }, [appTheme])
+
+  // Announce/open default file when joining the room
+  useEffect(() => {
+    if (socketRef.current && roomId) {
+      const defaultId = activeFileId
+      const defaultName = files[defaultId]?.name || defaultId
+      socketRef.current.emit('openFile', { roomId, fileId: defaultId, name: defaultName })
+      socketRef.current.emit('setActiveFile', { roomId, fileId: defaultId })
+      socketRef.current.emit('requestFile', { roomId, fileId: defaultId })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId])
 
   // Update language syntax highlighting without recreating the model
   React.useEffect(() => {

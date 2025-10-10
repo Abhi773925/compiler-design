@@ -104,6 +104,9 @@ app.use((err, req, res, next) => {
 const roomUsers = new Map();
 const roomsWithActiveCalls = new Set();
 const activeCallParticipants = new Map(); // Track who is in each call
+// Shared files state per room
+const roomFiles = new Map(); // roomId -> Map(fileId -> { name, content, updatedAt })
+const roomActiveFile = new Map(); // roomId -> active fileId
 
 // Helper function to get user from a room
 function getUserFromRoom(roomId, socketId) {
@@ -219,6 +222,60 @@ io.on("connection", (socket) => {
       );
     } catch (error) {
       console.error("Error updating session code:", error);
+    }
+  });
+
+  // ===== Shared Files Collaboration =====
+  // Open (or announce) a file in the room
+  socket.on("openFile", ({ roomId, fileId, name }) => {
+    try {
+      if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
+      const files = roomFiles.get(roomId);
+      if (!files.has(fileId)) {
+        files.set(fileId, { name: name || fileId, content: "", updatedAt: new Date().toISOString() });
+      }
+      io.to(roomId).emit("fileOpened", { fileId, name: files.get(fileId).name });
+      // If no active file yet, set this as active
+      if (!roomActiveFile.has(roomId)) {
+        roomActiveFile.set(roomId, fileId);
+        io.to(roomId).emit("activeFileChanged", { fileId });
+      }
+    } catch (e) {
+      console.error("openFile error:", e);
+    }
+  });
+
+  // Change file content
+  socket.on("changeFile", ({ roomId, fileId, content }) => {
+    try {
+      if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
+      const files = roomFiles.get(roomId);
+      const name = files.get(fileId)?.name || fileId;
+      files.set(fileId, { name, content, updatedAt: new Date().toISOString() });
+      socket.to(roomId).emit("fileContentUpdate", { fileId, content, userId: socket.id, userName: socket.userName });
+    } catch (e) {
+      console.error("changeFile error:", e);
+    }
+  });
+
+  // Request current content of a file
+  socket.on("requestFile", ({ roomId, fileId }) => {
+    try {
+      const content = roomFiles.get(roomId)?.get(fileId)?.content || "";
+      const name = roomFiles.get(roomId)?.get(fileId)?.name || fileId;
+      socket.emit("fileContentSnapshot", { fileId, name, content });
+    } catch (e) {
+      console.error("requestFile error:", e);
+    }
+  });
+
+  // Set active file for the room (e.g., switching tabs)
+  socket.on("setActiveFile", ({ roomId, fileId }) => {
+    try {
+      roomActiveFile.set(roomId, fileId);
+      io.to(roomId).emit("activeFileChanged", { fileId });
+    } catch (e) {
+      console.error("setActiveFile error:", e);
     }
   });
 

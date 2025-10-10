@@ -15,6 +15,7 @@ import PracticePage from "./pages/PracticePage";
 import ProblemSolver from "./pages/ProblemSolver";
 import ProfilePage from "./pages/ProfilePage";
 import CollaborationPage from "./pages/CollaborationPage";
+import GitHubCallback from "./components/github/GitHubCallback";
 import AuthModal from "./components/auth/AuthModal";
 import "./App.css";
 // Get Google OAuth Client ID from environment variables
@@ -38,6 +39,7 @@ function App() {
                 <Route path="/practice/:slug" element={<ProblemSolver />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/compiler" element={<CollaborationPage />} />
+                <Route path="/github-callback" element={<GitHubCallback />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
 

@@ -33,8 +33,8 @@ const Compiler = ({ roomId, userName }) => {
   const [activeUsers, setActiveUsers] = useState({}) // {userId: {typing: bool, lastActivity: timestamp}}
   const [typingUsers, setTypingUsers] = useState(new Set()) // Set of userIds who are typing
   const [showFullscreenWhiteboard, setShowFullscreenWhiteboard] = useState(false) // Toggle fullscreen whiteboard
-  const [showGitHubModal, setShowGitHubModal] = useState(false) // Toggle GitHub integration modal
-  const [showGitHubSaveModal, setShowGitHubSaveModal] = useState(false) // Toggle GitHub save modal
+  const [gitHubLoadModalOpen, setGitHubLoadModalOpen] = useState(false) // Toggle GitHub load modal
+  const [gitHubSaveModalOpen, setGitHubSaveModalOpen] = useState(false) // Toggle GitHub save modal
   const [tldrawEditor, setTldrawEditor] = useState(null) // tldraw editor instance
   const tldrawUnsubRef = useRef(null)
   const whiteboardOpenedByOthers = useRef(true) // Track if whiteboard was opened by another user
@@ -3029,6 +3029,53 @@ console.log("white");
     }
   }, [tldrawEditor, roomId])
 
+  // Handle file selection from GitHub
+  const handleFileSelection = (fileData) => {
+    // Set the editor language based on file extension
+    const fileExtension = fileData.name.split('.').pop().toLowerCase();
+    const extensionToLanguage = {
+      js: 'javascript',
+      py: 'python',
+      java: 'java',
+      cpp: 'cpp',
+      c: 'c',
+      cs: 'csharp',
+      ts: 'typescript',
+      go: 'go',
+      rs: 'rust',
+      php: 'php',
+      rb: 'ruby',
+      kt: 'kotlin',
+      swift: 'swift',
+      r: 'r',
+      sql: 'sql',
+      html: 'html',
+      css: 'css',
+      md: 'markdown',
+      json: 'json',
+    };
+    
+    const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
+    
+    // Update file content in editor
+    setCode(fileData.content);
+    
+    // Update language if we can determine it
+    if (detectedLanguage) {
+      setLanguage(detectedLanguage);
+    }
+    
+    // Update file name/path display
+    setActiveFileId(fileData.name);
+    
+    // Notify collaborators if in a room
+    if (roomId && socket) {
+      socket.emit('code-change', { code: fileData.content, language: detectedLanguage });
+      socket.emit('language-change', detectedLanguage);
+      socket.emit('filename-change', fileData.name);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-white dark:bg-black text-gray-900 dark:text-white overflow-hidden relative z-10">
       {/* Spotlight Effect */}
@@ -3624,6 +3671,58 @@ console.log("white");
                 )}
               </motion.button>
 
+              {/* GitHub Load Button */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setGitHubLoadModalOpen(true)}
+                className="flex items-center justify-center bg-white dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-900 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-400 p-1.5 sm:p-2 rounded-lg transition-all duration-200"
+                title="Load from GitHub"
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  width="16" 
+                  height="16" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="sm:w-[18px] sm:h-[18px]"
+                >
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                </svg>
+                <span className="sr-only">Load from GitHub</span>
+              </motion.button>
+
+              {/* GitHub Save Button */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setGitHubSaveModalOpen(true)}
+                className="flex items-center justify-center bg-white dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-900 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-400 p-1.5 sm:p-2 rounded-lg transition-all duration-200"
+                title="Save to GitHub"
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  width="16" 
+                  height="16" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="sm:w-[18px] sm:h-[18px]"
+                >
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+                <span className="sr-only">Save to GitHub</span>
+              </motion.button>
+
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -4117,6 +4216,29 @@ console.log("white");
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* GitHub Integration Modals */}
+      <AnimatePresence>
+        {gitHubLoadModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <GitHubIntegration 
+              onClose={() => setGitHubLoadModalOpen(false)}
+              onSelectFile={handleFileSelection}
+            />
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {gitHubSaveModalOpen && (
+          <GitHubSaveModal
+            onClose={() => setGitHubSaveModalOpen(false)}
+            code={code}
+            language={language}
+            fileName={activeFileId}
+          />
         )}
       </AnimatePresence>
     </div>

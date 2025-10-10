@@ -79,7 +79,7 @@ const GitHubCallback = () => {
           <div className="mt-6">
             <button
               onClick={() => navigate('/compiler')}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded transition duration-200"
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
             >
               Return to Compiler
             </button>

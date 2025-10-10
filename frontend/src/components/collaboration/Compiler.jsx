@@ -265,8 +265,20 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         if (user && user.id) {
           console.log('Periodic refresh of saved files');
           fetchSavedFiles();
+          
+          // Also update the FilesTab component if it's available
+          if (fileTabsRef.current) {
+            try {
+              const currentView = fileTabsRef.current.getCurrentView();
+              if (currentView === 'saved') {
+                fileTabsRef.current.refreshFiles();
+              }
+            } catch (e) {
+              console.warn('Could not refresh FilesTab:', e);
+            }
+          }
         }
-      }, 30000); // Refresh every 30 seconds
+      }, 5000); // Refresh every 5 seconds - reduced to be more responsive
       
       return () => {
         clearInterval(refreshInterval);
@@ -3784,6 +3796,13 @@ console.log("white");
             
             // Refresh the saved files list
             fetchSavedFiles();
+            
+            // Update the FilesTab to show the saved files section
+            if (fileTabsRef.current && typeof fileTabsRef.current.showSavedFiles === 'function') {
+              setTimeout(() => {
+                fileTabsRef.current.showSavedFiles();
+              }, 1000);
+            }
           }
         }).catch(error => {
           console.error('Error saving GitHub file to database:', error);

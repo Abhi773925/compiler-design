@@ -21,15 +21,23 @@ const FilesTab = forwardRef(({
 
   // Fetch saved files from the backend
   useEffect(() => {
-    if (user && view === 'saved') {
+    if (user) {
       console.log('Loading saved files for user:', user.name || user.id);
       loadSavedFiles();
     }
-  }, [user, view]);
+  }, [user]);
+  
+  // Also reload files when the view changes to 'saved'
+  useEffect(() => {
+    if (view === 'saved' && user) {
+      console.log('Loading saved files when switching to saved view');
+      loadSavedFiles();
+    }
+  }, [view]);
   
   // Also load saved files when first mounting if user is already logged in
   useEffect(() => {
-    if (user && view === 'saved') {
+    if (user) {
       console.log('Initial load of saved files');
       loadSavedFiles();
     }
@@ -263,7 +271,13 @@ const FilesTab = forwardRef(({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
           </svg>
           <p className="text-gray-500 dark:text-gray-400 mb-1">You don't have any saved files</p>
-          <p className="text-sm text-gray-400 dark:text-gray-500">Files from GitHub are automatically saved</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500">Files from GitHub are automatically saved when loaded</p>
+          <button
+            onClick={loadSavedFiles}
+            className="mt-3 text-sm py-2 px-4 bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-800/40 text-orange-600 dark:text-orange-300 rounded-md transition-colors"
+          >
+            Refresh Files
+          </button>
         </div>
       )}
     </div>
@@ -284,6 +298,13 @@ const FilesTab = forwardRef(({
     setCurrentView: (newView) => {
       setView(newView);
       if (newView === 'saved' && user) {
+        loadSavedFiles();
+      }
+    },
+    // Add a method to force showing the saved files tab
+    showSavedFiles: () => {
+      setView('saved');
+      if (user) {
         loadSavedFiles();
       }
     }

@@ -156,7 +156,7 @@ io.on("connection", (socket) => {
       }
     }
 
-    // Update session in database
+    // Load files from database into server memory if not already loaded
     try {
       const session = await Session.findOne({ roomId });
       if (session) {
@@ -175,6 +175,35 @@ io.on("connection", (socket) => {
           // Update lastSeen
           existingParticipant.lastSeen = new Date();
         }
+        
+        // Initialize file collections for this room if needed
+        if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
+        if (!roomFileMeta.has(roomId)) roomFileMeta.set(roomId, new Map());
+        
+        // Load files from session into memory
+        if (session.files && session.files.length > 0) {
+          session.files.forEach(file => {
+            roomFiles.get(roomId).set(file.fileId, {
+              name: file.name,
+              content: file.content || "",
+              updatedAt: file.uploadedAt || new Date().toISOString()
+            });
+            
+            roomFileMeta.get(roomId).set(file.fileId, {
+              name: file.name,
+              mime: file.mime || "text/plain",
+              size: file.size || 0,
+              uploadedBy: file.uploadedBy,
+              uploaderName: file.uploaderName
+            });
+          });
+          
+          // Set first file as active if no active file is set
+          if (!roomActiveFile.has(roomId) && session.files.length > 0) {
+            roomActiveFile.set(roomId, session.files[0].fileId);
+          }
+        }
+        
         session.lastActivity = new Date();
         await session.save();
       }
@@ -281,14 +310,74 @@ io.on("connection", (socket) => {
   });
 
   // Upload a file (metadata + content in base64 or text)
-  socket.on("uploadFile", ({ roomId, fileId, name, mime, size, content }) => {
+  socket.on("uploadFile", async ({ roomId, fileId, name, mime, size, content, uploadedBy, uploaderName }) => {
     try {
       if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
       if (!roomFileMeta.has(roomId)) roomFileMeta.set(roomId, new Map());
-      roomFiles.get(roomId).set(fileId, { name: name || fileId, content: content || "", updatedAt: new Date().toISOString() });
-      roomFileMeta.get(roomId).set(fileId, { name: name || fileId, mime: mime || "text/plain", size: size || 0 });
-      io.to(roomId).emit("fileUploaded", { fileId, name, mime, size });
-      io.to(roomId).emit("fileContentSnapshot", { fileId, name, content: content || "" });
+      
+      const timestamp = new Date().toISOString();
+      roomFiles.get(roomId).set(fileId, { 
+        name: name || fileId, 
+        content: content || "", 
+        updatedAt: timestamp
+      });
+      
+      roomFileMeta.get(roomId).set(fileId, { 
+        name: name || fileId, 
+        mime: mime || "text/plain", 
+        size: size || 0,
+        uploadedBy: uploadedBy || socket.userId,
+        uploaderName: uploaderName || socket.userName
+      });
+      
+      io.to(roomId).emit("fileUploaded", { 
+        fileId, 
+        name, 
+        mime, 
+        size, 
+        uploadedBy: uploadedBy || socket.userId,
+        uploaderName: uploaderName || socket.userName
+      });
+      
+      io.to(roomId).emit("fileContentSnapshot", { 
+        fileId, 
+        name, 
+        content: content || "" 
+      });
+      
+      // Save to database
+      try {
+        const session = await Session.findOne({ roomId });
+        if (session) {
+          // Check if file exists and update or add new
+          const fileIndex = session.files?.findIndex(f => f.fileId === fileId);
+          const fileEntry = {
+            fileId,
+            name: name || fileId,
+            content: content || "",
+            mime: mime || "text/plain",
+            size: size || 0,
+            uploadedBy: uploadedBy || socket.userId,
+            uploaderName: uploaderName || socket.userName,
+            uploadedAt: new Date()
+          };
+          
+          if (fileIndex !== -1 && fileIndex !== undefined) {
+            session.files[fileIndex] = fileEntry;
+          } else {
+            if (!session.files) {
+              session.files = [];
+            }
+            session.files.push(fileEntry);
+          }
+          
+          session.lastActivity = new Date();
+          await session.save();
+          console.log(`File '${name}' saved to database for room ${roomId}`);
+        }
+      } catch (dbError) {
+        console.error("Error saving file to database:", dbError);
+      }
     } catch (e) {
       console.error("uploadFile error:", e);
     }

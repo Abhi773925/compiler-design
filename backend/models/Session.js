@@ -43,6 +43,21 @@ const sessionSchema = new mongoose.Schema(
         },
       },
     ],
+    files: [
+      {
+        fileId: String,
+        name: String,
+        content: String,
+        mime: String,
+        size: Number,
+        uploadedBy: String, // User ID
+        uploaderName: String, // User name
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        }
+      },
+    ],
     whiteboardElements: {
       type: Array,
       default: [],
@@ -71,7 +86,8 @@ sessionSchema.pre("save", function (next) {
     this.isModified("language") ||
     this.isModified("participants") ||
     this.isModified("messages") ||
-    this.isModified("whiteboardElements")
+    this.isModified("whiteboardElements") ||
+    this.isModified("files")
   ) {
     this.lastActivity = new Date();
   }

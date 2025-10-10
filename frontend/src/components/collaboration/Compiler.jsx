@@ -1773,44 +1773,70 @@ console.log("white");
       }
     })
 
-    // Restore session state from database
-    const restoreSession = async () => {
-      try {
-        const response = await fetch(`${SOCKET_URL}/api/sessions/${roomId}`)
-        if (response.ok) {
-          const data = await response.json()
-          const session = data.session
+  // Restore session state from database
+  const restoreSession = async () => {
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/sessions/${roomId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const session = data.session
 
-          // Restore code and language
-          if (session.code && monacoRef.current) {
-            isRemoteChange.current = true
-            monacoRef.current.setValue(session.code)
-            setCode(session.code)
-          }
-          if (session.language) {
-            setLanguage(session.language)
-          }
-
-          // Restore messages
-          if (session.messages && session.messages.length > 0) {
-            const formattedMessages = session.messages.map((msg, index) => ({
-              id: index,
-              userId: msg.userId,
-              userName: msg.userName,
-              message: msg.message,
-              timestamp: msg.timestamp,
-            }))
-            setMessages(formattedMessages)
-          }
-
-          console.log("Session restored successfully:", session)
+        // Restore code and language
+        if (session.code && monacoRef.current) {
+          isRemoteChange.current = true
+          monacoRef.current.setValue(session.code)
+          setCode(session.code)
         }
-      } catch (error) {
-        console.error("Error restoring session:", error)
-      }
-    }
+        if (session.language) {
+          setLanguage(session.language)
+        }
 
-    // Wait for editor to be ready, then restore session
+        // Restore messages
+        if (session.messages && session.messages.length > 0) {
+          const formattedMessages = session.messages.map((msg, index) => ({
+            id: index,
+            userId: msg.userId,
+            userName: msg.userName,
+            message: msg.message,
+            timestamp: msg.timestamp,
+          }))
+          setMessages(formattedMessages)
+        }
+        
+        // Restore files
+        if (session.files && session.files.length > 0) {
+          const filesMap = {}
+          session.files.forEach(file => {
+            filesMap[file.fileId] = {
+              name: file.name,
+              content: file.content,
+              mime: file.mime,
+              size: file.size,
+              uploadedBy: file.uploadedBy,
+              uploaderName: file.uploaderName,
+              uploadedAt: file.uploadedAt
+            }
+          })
+          setFiles(filesMap)
+          
+          // Set active file to the first file or keep current if it exists
+          if (!files[activeFileId] && Object.keys(filesMap).length > 0) {
+            const firstFileId = Object.keys(filesMap)[0]
+            setActiveFileId(firstFileId)
+            if (monacoRef.current) {
+              isRemoteChange.current = true
+              monacoRef.current.setValue(filesMap[firstFileId].content)
+              setCode(filesMap[firstFileId].content)
+            }
+          }
+        }
+
+        console.log("Session restored successfully:", session)
+      }
+    } catch (error) {
+      console.error("Error restoring session:", error)
+    }
+  }    // Wait for editor to be ready, then restore session
     if (editorReady) {
       restoreSession()
     }
@@ -2738,21 +2764,56 @@ console.log("white");
     try {
       const file = event?.target?.files?.[0]
       if (!file || !socketRef.current || !roomIdRef.current) return
+      
+      setOutput(`Reading file ${file.name}...`)
+      setShowOutput(true)
+      
       const text = await file.text()
       const fileId = `${file.name}-${Date.now()}`
+      
+      // Update local state
       setFiles(prev => ({ ...prev, [fileId]: { name: file.name, content: text } }))
       setActiveFileId(fileId)
+      
+      // Share with other users in room via socket
       socketRef.current.emit('uploadFile', {
         roomId: roomIdRef.current,
         fileId,
         name: file.name,
         mime: file.type,
         size: file.size,
-        content: text
+        content: text,
+        uploadedBy: user?._id || socketRef.current.id,
+        uploaderName: user?.name || userName || "Anonymous"
       })
+      
+      // Set as active file
       socketRef.current.emit('setActiveFile', { roomId: roomIdRef.current, fileId })
+      
+      // Save to database
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com"
+      await fetch(`${BACKEND_URL}/api/sessions/${roomIdRef.current}/files`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileId,
+          name: file.name,
+          content: text,
+          mime: file.type,
+          size: file.size,
+          uploadedBy: user?._id || socketRef.current.id,
+          uploaderName: user?.name || userName || "Anonymous"
+        }),
+      })
+      
+      setOutput(`File "${file.name}" uploaded successfully!`)
+      setTimeout(() => setShowOutput(false), 3000)
     } catch (e) {
       console.error('Error uploading file:', e)
+      setOutput(`Error uploading file: ${e.message}`)
+      setShowOutput(true)
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
@@ -3148,14 +3209,45 @@ console.log("white");
 
                 {/* Files Tab Content */}
                 {activeTab === "files" && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    {/* File Upload Section */}
                     <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 dark:text-gray-300">Files:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {Object.entries(files).map(([fid, f]) => (
-                              <button
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Upload New File</h3>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-grow relative">
+                          <input 
+                            ref={fileInputRef} 
+                            type="file" 
+                            onChange={handleUploadFile} 
+                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" 
+                          />
+                          <button className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-400 rounded text-sm transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                              <polyline points="17 8 12 3 7 8"></polyline>
+                              <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            Choose a file...
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Upload code files to share with others in this session
+                      </p>
+                    </div>
+                    
+                    {/* Active Files Section */}
+                    <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Available Files</h3>
+                      {Object.entries(files).length > 0 ? (
+                        <div className="space-y-2">
+                          {Object.entries(files).map(([fid, f]) => {
+                            // Determine file type icon based on file extension
+                            const ext = (f.name?.split('.').pop() || '').toLowerCase()
+                            const isCodeFile = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'cs', 'go', 'rb', 'php', 'html', 'css'].includes(ext)
+                            
+                            return (
+                              <div 
                                 key={fid}
                                 onClick={() => {
                                   setActiveFileId(fid)
@@ -3164,17 +3256,53 @@ console.log("white");
                                     socketRef.current.emit('requestFile', { roomId, fileId: fid })
                                   }
                                 }}
-                                className={`px-2 py-1 rounded text-xs border ${fid === activeFileId ? 'bg-orange-600 text-white border-orange-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600'}`}
+                                className={`p-2 rounded-lg cursor-pointer border transition-all ${
+                                  fid === activeFileId 
+                                    ? 'bg-orange-100 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700' 
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-700'
+                                }`}
                               >
-                                {f?.name || fid}
-                              </button>
-                            ))}
-                          </div>
+                                <div className="flex items-center gap-2">
+                                  {/* File icon */}
+                                  {isCodeFile ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-500 dark:text-orange-400">
+                                      <polyline points="16 18 22 12 16 6"></polyline>
+                                      <polyline points="8 6 2 12 8 18"></polyline>
+                                    </svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 dark:text-gray-400">
+                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                      <polyline points="14 2 14 8 20 8"></polyline>
+                                    </svg>
+                                  )}
+                                  
+                                  {/* File name */}
+                                  <span className={`text-sm ${fid === activeFileId ? 'font-medium text-orange-700 dark:text-orange-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                                    {f?.name || fid}
+                                  </span>
+                                  
+                                  {/* Active indicator */}
+                                  {fid === activeFileId && (
+                                    <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full ml-auto">
+                                      Active
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
-                        <div>
-                          <input ref={fileInputRef} type="file" onChange={handleUploadFile} className="text-xs" />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 mb-2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                          </svg>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No files uploaded yet</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Upload a file to get started</p>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}

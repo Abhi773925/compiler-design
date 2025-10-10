@@ -27,7 +27,7 @@ export const authenticateWithGithub = () => {
   localStorage.setItem('github_auth_state', state);
   
   // Build the authorization URL
-  const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}`;
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=Ov23likZXqyctlogOjrD&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}`;
   
   // Open GitHub authorization page
   window.location.href = authUrl;

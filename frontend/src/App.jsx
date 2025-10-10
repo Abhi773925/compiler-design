@@ -39,6 +39,7 @@ function App() {
                 <Route path="/practice/:slug" element={<ProblemSolver />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/compiler" element={<CollaborationPage />} />
+                <Route path="/auth/github/callback" element={<GitHubCallback />} />
                 <Route path="/github-callback" element={<GitHubCallback />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

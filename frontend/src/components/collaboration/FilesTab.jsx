@@ -235,7 +235,10 @@ const FilesTab = forwardRef(({
       
       {/* Explanation for users */}
       <div className="mb-3 p-2 bg-orange-50 dark:bg-orange-900/10 rounded-md">
-        <p className="text-sm text-gray-700 dark:text-gray-300">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Your Saved Files
+        </p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
           This section shows all your saved files from:
         </p>
         <ul className="mt-1 ml-4 list-disc text-xs text-gray-600 dark:text-gray-400">
@@ -252,59 +255,91 @@ const FilesTab = forwardRef(({
           <div
             key={file._id}
             onClick={() => handleLoadSavedFile(file._id)}
-            className="px-3 py-2 flex items-center justify-between rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group"
+            className="px-3 py-3 flex items-center justify-between rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
           >
-            <div className="flex items-center overflow-hidden">
+            <div className="flex items-center overflow-hidden w-full">
+              {/* File icon based on source */}
               {file.source === 'github' ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
+                <div className="flex items-center justify-center h-8 w-8 rounded-md bg-blue-100 dark:bg-blue-900/30 mr-3 flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                  </svg>
+                </div>
+              ) : file.source === 'local-upload' ? (
+                <div className="flex items-center justify-center h-8 w-8 rounded-md bg-green-100 dark:bg-green-900/30 mr-3 flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                </div>
+              ) : file.source === 'custom' ? (
+                <div className="flex items-center justify-center h-8 w-8 rounded-md bg-purple-100 dark:bg-purple-900/30 mr-3 flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </div>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <div className="flex items-center justify-center h-8 w-8 rounded-md bg-orange-100 dark:bg-orange-900/30 mr-3 flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
               )}
-              <div className="overflow-hidden">
-                <span className="block truncate">{file.name}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {new Date(file.lastAccessed || file.updatedAt).toLocaleDateString()} • 
-                  {file.source === 'github' ? 
-                    <span className="text-xs text-blue-500 dark:text-blue-400">GitHub: {file.metadata?.repoName || 'Repository'}</span> :
-                    file.source === 'local-upload' ? 
-                    <span className="text-xs text-green-500 dark:text-green-400">Local Upload</span> :
-                    <span className="text-xs text-orange-500 dark:text-orange-400">Personal file</span>
-                  }
-                </span>
+              
+              {/* File details */}
+              <div className="overflow-hidden flex-1">
+                <span className="block truncate text-sm font-medium text-gray-800 dark:text-gray-200">{file.name}</span>
+                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <span className="mr-2">{new Date(file.lastAccessed || file.updatedAt).toLocaleDateString()}</span>
+                  {file.source === 'github' ? (
+                    <span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-md whitespace-nowrap">
+                      GitHub: {file.metadata?.repoName || 'Repository'}
+                    </span>
+                  ) : file.source === 'local-upload' ? (
+                    <span className="text-xs px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-md whitespace-nowrap">
+                      Local Upload
+                    </span>
+                  ) : file.source === 'custom' ? (
+                    <span className="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-md whitespace-nowrap">
+                      Custom File
+                    </span>
+                  ) : (
+                    <span className="text-xs px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-md whitespace-nowrap">
+                      Personal File
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             
             {/* Load icon */}
-            <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-            </span>
+            <div className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+              <span className="bg-orange-100 dark:bg-orange-900/30 p-1.5 rounded-md text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-800/40">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+            </div>
           </div>
         ))
       ) : (
         <div className="text-center py-6">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
           </svg>
-          <p className="text-gray-500 dark:text-gray-400 mb-1">No saved files found</p>
-          <p className="text-sm text-gray-400 dark:text-gray-500">
+          <p className="text-lg text-gray-500 dark:text-gray-400 mb-2 font-medium">No saved files found</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mb-8 max-w-xs mx-auto">
             Upload files or load from GitHub to save them here
           </p>
-          <div className="mt-4 flex flex-col gap-2">
+          <div className="mt-4 flex flex-col gap-3">
             <button
               onClick={loadSavedFiles}
-              className="text-sm py-2 px-4 bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-800/40 text-orange-600 dark:text-orange-300 rounded-md transition-colors mx-auto"
+              className="text-sm py-2.5 px-6 bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-800/40 text-orange-600 dark:text-orange-300 rounded-md transition-colors mx-auto font-medium"
             >
               Refresh Files
             </button>
             <button
               onClick={onOpenGitHubModal}
-              className="text-sm py-2 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md transition-colors mx-auto flex items-center gap-2"
+              className="text-sm py-2.5 px-6 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md transition-colors mx-auto flex items-center gap-2 font-medium"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
@@ -577,16 +612,17 @@ const FilesTab = forwardRef(({
           {view === 'session' ? 'Current Files' : 'Your Saved Files'}
         </h3>
         
-        <div className="flex space-x-1">
-          {/* Create New File button - show in both views */}
+        <div className="flex space-x-2">
+          {/* Create New File button - show in both views with better visibility */}
           <button
             onClick={() => handleCreateNewFile()}
-            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
+            className={`flex items-center ${view === 'saved' ? 'p-1.5 bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-800/40' : 'p-1'} rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors`}
             title="Create New File"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`${view === 'saved' ? 'h-4 w-4 text-orange-600 dark:text-orange-400' : 'h-5 w-5'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
+            {view === 'saved' && <span className="ml-1 text-xs font-medium text-orange-600 dark:text-orange-400">New</span>}
           </button>
         
           {view === 'session' && (

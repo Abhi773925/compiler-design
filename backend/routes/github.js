@@ -8,7 +8,7 @@ const axios = require('axios');
  */
 router.post('/token', async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, clientId, clientSecret } = req.body;
     
     if (!code) {
       return res.status(400).json({ 
@@ -17,11 +17,11 @@ router.post('/token', async (req, res) => {
       });
     }
     
-    // GitHub OAuth app credentials - these should be in environment variables
-    const clientId = process.env.GITHUB_CLIENT_ID;
-    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+    // Use credentials from request body if provided, otherwise try environment variables
+    const githubClientId = clientId || process.env.GITHUB_CLIENT_ID;
+    const githubClientSecret = clientSecret || process.env.GITHUB_CLIENT_SECRET;
     
-    if (!clientId || !clientSecret) {
+    if (!githubClientId || !githubClientSecret) {
       return res.status(500).json({ 
         success: false, 
         message: 'GitHub OAuth configuration is missing on the server' 
@@ -32,8 +32,8 @@ router.post('/token', async (req, res) => {
     const tokenResponse = await axios.post(
       'https://github.com/login/oauth/access_token',
       {
-        client_id: clientId,
-        client_secret: clientSecret,
+        client_id: githubClientId,
+        client_secret: githubClientSecret,
         code: code
       },
       {

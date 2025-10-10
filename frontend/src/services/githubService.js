@@ -50,17 +50,13 @@ export const handleGithubCallback = async (code, state) => {
   // Clear the stored state
   localStorage.removeItem('github_auth_state');
   
-  // Exchange code for access token through backend with hardcoded credentials
+  // Exchange code for access token through backend (credentials now hardcoded on server)
   const response = await fetch('https://compiler-design.onrender.com/api/github/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ 
-      code,
-      clientId: 'Ov23likZXqyctlogOjrD',
-      clientSecret: '33f8826253cb41cdb16802a4eb5971f73144eb28'
-    }),
+    body: JSON.stringify({ code }),
   });
   
   const data = await response.json();

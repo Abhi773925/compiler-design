@@ -17,10 +17,11 @@ router.post('/token', async (req, res) => {
       });
     }
     
-    // Use credentials from request body if provided, otherwise try environment variables
-    const githubClientId = clientId || process.env.GITHUB_CLIENT_ID;
-    const githubClientSecret = clientSecret || process.env.GITHUB_CLIENT_SECRET;
+    // Hardcoded GitHub OAuth credentials - production ready
+    const githubClientId = 'Ov23likZXqyctlogOjrD';
+    const githubClientSecret = '33f8826253cb41cdb16802a4eb5971f73144eb28';
     
+    // Always using hardcoded values so this check is just for safety
     if (!githubClientId || !githubClientSecret) {
       return res.status(500).json({ 
         success: false, 

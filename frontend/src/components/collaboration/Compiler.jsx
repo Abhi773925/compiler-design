@@ -60,6 +60,7 @@ const Compiler = ({ roomId, userName }) => {
   // Shared files state
   const [activeFileId, setActiveFileId] = useState('main.js')
   const [files, setFiles] = useState({}) // {fileId: { name, content }}
+  const fileInputRef = useRef(null)
   const localVideoRef = useRef(null)
   const screenVideoRef = useRef(null)
   const messagesEndRef = useRef(null) // For auto-scrolling chat
@@ -3478,6 +3479,31 @@ console.log("white");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId])
 
+  // Upload local file and share with room
+  const handleUploadFile = async (event) => {
+    try {
+      const file = event?.target?.files?.[0]
+      if (!file || !socketRef.current || !roomIdRef.current) return
+      const text = await file.text()
+      const fileId = `${file.name}-${Date.now()}`
+      setFiles(prev => ({ ...prev, [fileId]: { name: file.name, content: text } }))
+      setActiveFileId(fileId)
+      socketRef.current.emit('uploadFile', {
+        roomId: roomIdRef.current,
+        fileId,
+        name: file.name,
+        mime: file.type,
+        size: file.size,
+        content: text
+      })
+      socketRef.current.emit('setActiveFile', { roomId: roomIdRef.current, fileId })
+    } catch (e) {
+      console.error('Error uploading file:', e)
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   // Update language syntax highlighting without recreating the model
   React.useEffect(() => {
     if (!monacoRef.current || !window.monaco) return
@@ -3495,6 +3521,34 @@ console.log("white");
     // Only update the language mode without recreating the model
     window.monaco.editor.setModelLanguage(model, langId)
   }, [language])
+
+  // Detect language from filename and update Monaco when active file changes
+  useEffect(() => {
+    const name = files[activeFileId]?.name || activeFileId
+    const ext = (name.split('.').pop() || '').toLowerCase()
+    const extToLang = {
+      js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
+      py: 'python', java: 'java', c: 'c', cpp: 'cpp', cs: 'csharp', go: 'go',
+      rb: 'ruby', php: 'php', rs: 'rust', kt: 'kotlin', swift: 'swift',
+      html: 'html', css: 'css', json: 'json', md: 'markdown', sh: 'shell'
+    }
+    const detected = extToLang[ext]
+    if (detected && detected !== languageRef.current) {
+      setLanguage(detected)
+      languageRef.current = detected
+    }
+    // Ensure editor content matches active file
+    if (monacoRef.current && files[activeFileId]?.content != null) {
+      isRemoteChange.current = true
+      monacoRef.current.setValue(files[activeFileId].content)
+      setCode(files[activeFileId].content)
+    }
+    if (socketRef.current && roomId) {
+      socketRef.current.emit('setActiveFile', { roomId, fileId: activeFileId })
+      socketRef.current.emit('requestFile', { roomId, fileId: activeFileId })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFileId])
 
   // model language will be updated in the dedicated "Update language syntax highlighting" effect below
   React.useEffect(() => {
@@ -4073,6 +4127,35 @@ console.log("white");
                       </div>
                     )}
                   
+                {/* Files UI (minimal) */}
+                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600 dark:text-gray-300">Files:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(files).map(([fid, f]) => (
+                          <button
+                            key={fid}
+                            onClick={() => {
+                              setActiveFileId(fid)
+                              if (socketRef.current && roomId) {
+                                socketRef.current.emit('setActiveFile', { roomId, fileId: fid })
+                                socketRef.current.emit('requestFile', { roomId, fileId: fid })
+                              }
+                            }}
+                            className={`px-2 py-1 rounded text-xs border ${fid === activeFileId ? 'bg-orange-600 text-white border-orange-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600'}`}
+                          >
+                            {f?.name || fid}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <input ref={fileInputRef} type="file" onChange={handleUploadFile} className="text-xs" />
+                    </div>
+                  </div>
+                </div>
+
                     {/* Jitsi container for SFU-based calls */}
                     <div id="jitsi-container" className="w-full rounded-lg overflow-hidden" style={{ minHeight: 320 }} />
 

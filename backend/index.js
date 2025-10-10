@@ -107,6 +107,7 @@ const activeCallParticipants = new Map(); // Track who is in each call
 // Shared files state per room
 const roomFiles = new Map(); // roomId -> Map(fileId -> { name, content, updatedAt })
 const roomActiveFile = new Map(); // roomId -> active fileId
+const roomFileMeta = new Map(); // roomId -> Map(fileId -> { name, mime, size })
 
 // Helper function to get user from a room
 function getUserFromRoom(roomId, socketId) {
@@ -276,6 +277,20 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("activeFileChanged", { fileId });
     } catch (e) {
       console.error("setActiveFile error:", e);
+    }
+  });
+
+  // Upload a file (metadata + content in base64 or text)
+  socket.on("uploadFile", ({ roomId, fileId, name, mime, size, content }) => {
+    try {
+      if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
+      if (!roomFileMeta.has(roomId)) roomFileMeta.set(roomId, new Map());
+      roomFiles.get(roomId).set(fileId, { name: name || fileId, content: content || "", updatedAt: new Date().toISOString() });
+      roomFileMeta.get(roomId).set(fileId, { name: name || fileId, mime: mime || "text/plain", size: size || 0 });
+      io.to(roomId).emit("fileUploaded", { fileId, name, mime, size });
+      io.to(roomId).emit("fileContentSnapshot", { fileId, name, content: content || "" });
+    } catch (e) {
+      console.error("uploadFile error:", e);
     }
   });
 

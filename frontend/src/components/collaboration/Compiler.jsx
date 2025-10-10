@@ -3835,6 +3835,18 @@ console.log("white");
             </svg>
           </button>
 
+          {/* Files Tab */}
+          <button
+            onClick={() => setActiveTab(activeTab === "files" ? null : "files")}
+            className={`p-2.5 md:p-3 ${activeTab === "files" ? "bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400" : "hover:bg-orange-100 dark:hover:bg-orange-900/20 text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400"} rounded-lg mb-3 md:mb-4 transition-all duration-200 hover:scale-105`}
+            title="Files"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto">
+              <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+              <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z" />
+            </svg>
+          </button>
+
           <div className="flex-grow"></div>
 
           {/* Settings */}
@@ -3983,24 +3995,32 @@ console.log("white");
                 {/* Files Tab Content */}
                 {activeTab === "files" && (
                   <div className="space-y-2">
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="mx-auto text-gray-400 mb-3"
-                      >
-                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-                        <polyline points="13 2 13 9 20 9"></polyline>
-                      </svg>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">File sharing</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Coming soon...</p>
+                    <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-300">Files:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(files).map(([fid, f]) => (
+                              <button
+                                key={fid}
+                                onClick={() => {
+                                  setActiveFileId(fid)
+                                  if (socketRef.current && roomId) {
+                                    socketRef.current.emit('setActiveFile', { roomId, fileId: fid })
+                                    socketRef.current.emit('requestFile', { roomId, fileId: fid })
+                                  }
+                                }}
+                                className={`px-2 py-1 rounded text-xs border ${fid === activeFileId ? 'bg-orange-600 text-white border-orange-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600'}`}
+                              >
+                                {f?.name || fid}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <input ref={fileInputRef} type="file" onChange={handleUploadFile} className="text-xs" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -4127,34 +4147,7 @@ console.log("white");
                       </div>
                     )}
                   
-                {/* Files UI (minimal) */}
-                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600 dark:text-gray-300">Files:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {Object.entries(files).map(([fid, f]) => (
-                          <button
-                            key={fid}
-                            onClick={() => {
-                              setActiveFileId(fid)
-                              if (socketRef.current && roomId) {
-                                socketRef.current.emit('setActiveFile', { roomId, fileId: fid })
-                                socketRef.current.emit('requestFile', { roomId, fileId: fid })
-                              }
-                            }}
-                            className={`px-2 py-1 rounded text-xs border ${fid === activeFileId ? 'bg-orange-600 text-white border-orange-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600'}`}
-                          >
-                            {f?.name || fid}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <input ref={fileInputRef} type="file" onChange={handleUploadFile} className="text-xs" />
-                    </div>
-                  </div>
-                </div>
+                
 
                     {/* Jitsi container for SFU-based calls */}
                     <div id="jitsi-container" className="w-full rounded-lg overflow-hidden" style={{ minHeight: 320 }} />

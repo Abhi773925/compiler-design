@@ -349,6 +349,7 @@ const FilesTab = forwardRef(({
   // Handle creating a new file
   const handleCreateNewFile = () => {
     setNewFileName('');
+    // keep initial content minimal and short; user can edit later
     setNewFileContent('// Write your code here...');
     setShowCreateFileModal(true);
   };
@@ -367,62 +368,29 @@ const FilesTab = forwardRef(({
     
     try {
       setLoading(true);
-      
-      // Add file extension if not present
+      // Use exact filename provided; if no extension, default to .js
       let fileName = newFileName.trim();
       if (!fileName.includes('.')) {
-        fileName += '.js';  // Default to .js extension
+        fileName = `${fileName}.js`;
       }
-      
-      // Create file data object
-      const fileData = {
-        name: fileName,
-        content: newFileContent,
-        source: 'custom',  // Mark as custom file
-        createdAt: new Date().toISOString()
-      };
-      
-      // First create in current session
-      const newFileId = `custom-${Date.now()}`;
-      
-      // Add to current session files
-      const newFile = {
-        name: fileName,
-        content: newFileContent,
-        source: 'custom'
-      };
-      
-      // Load into the editor
+
+      const fileId = `custom-${Date.now()}`;
+
+      // Load into editor and request DB save in a single call
       onLoadFile({
-        fileId: newFileId,
-        ...newFile
+        fileId,
+        name: fileName,
+        content: newFileContent,
+        source: 'custom',
+        saveToDb: true
       });
-      
-      // Save to database if user is logged in
-      if (user) {
-        try {
-          console.log('Saving custom file to database:', fileData);
-          // Use the onLoadFile function which will handle saving to DB
-          onLoadFile({
-            fileId: newFileId,
-            name: fileName,
-            content: newFileContent,
-            source: 'custom',
-            saveToDb: true  // Flag to indicate this should be saved
-          });
-          
-          // Refresh saved files list
-          setTimeout(() => {
-            loadSavedFiles();
-          }, 500);
-        } catch (err) {
-          console.error('Error saving custom file:', err);
-          setError('Failed to save file to your account');
-        }
-      }
-      
-      // Close modal
+
+      // Refresh saved files shortly after
+      setTimeout(() => loadSavedFiles(), 600);
+
+      // Close modal and clear errors
       setShowCreateFileModal(false);
+      setError(null);
     } catch (err) {
       console.error('Error creating new file:', err);
       setError('Failed to create file');
@@ -489,17 +457,17 @@ const FilesTab = forwardRef(({
             className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700"
             onClick={e => e.stopPropagation()}
           >
-            {/* Modal Header with Icon */}
+            {/* Modal Header with minimal CRCT-themed icon */}
             <div className="flex items-center gap-3 mb-6">
-              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex-shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600 dark:text-orange-400" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4 4h12v2H6v12H4V4zM20 8h-2v12H8v2h10a2 2 0 0 0 2-2V8z" />
                 </svg>
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create Custom File</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create File</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Create and save your own code files
+                  Enter a filename (include extension if you want — e.g. a.js). The file will be saved to your account and shown with the exact name you provide.
                 </p>
               </div>
               <button 
@@ -547,22 +515,9 @@ const FilesTab = forwardRef(({
               </p>
             </div>
             
-            {/* File Content Input */}
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Initial Content
-              </label>
-              <div className="relative">
-                <textarea
-                  value={newFileContent}
-                  onChange={(e) => setNewFileContent(e.target.value)}
-                  rows={10}
-                  className="w-full p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm leading-relaxed transition-shadow"
-                />
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 ml-1">
-                You can edit the code in the editor after creating the file
-              </p>
+            {/* Minimal: no large content input here. Editor will open for editing after creation. */}
+            <div className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              The file's content will be editable in the editor after creation.
             </div>
             
             {/* Action Buttons */}
@@ -576,7 +531,7 @@ const FilesTab = forwardRef(({
               <button
                 onClick={handleSaveNewFile}
                 disabled={loading || !newFileName.trim()}
-                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg disabled:opacity-50 disabled:hover:bg-purple-600 flex items-center font-medium transition-colors gap-2 shadow-sm"
+                className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg disabled:opacity-50 disabled:hover:bg-orange-600 flex items-center font-medium transition-colors gap-2 shadow-sm"
               >
                 {loading ? (
                   <>

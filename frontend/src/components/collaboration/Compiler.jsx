@@ -33,7 +33,10 @@ const Compiler = ({ roomId, userName }) => {
   const [isVideoOn, setIsVideoOn] = useState(false)
   const [isAudioOn, setIsAudioOn] = useState(false)
   const [isScreenSharing, setIsScreenSharing] = useState(false)
-  const [incomingCall, setIncomingCall] = useState(null) // {from: userId, userName: string}
+  const [incomingCall, setIncomingCall] = useState(null) // {from: userId|"room", userName: string}
+  const inCallRef = useRef(false)
+  const lastInviteFromRef = useRef(null)
+  const lastInviteAtRef = useRef(0)
   const [handRaised, setHandRaised] = useState(false) // For raise hand feature
   const [raisedHands, setRaisedHands] = useState({}) // Track users with raised hands {userId: timestamp}
   const [messages, setMessages] = useState([]) // Chat messages [{id, userId, userName, message, timestamp}]
@@ -1435,6 +1438,11 @@ const Compiler = ({ roomId, userName }) => {
         // }, 5000);
       }
       
+      // If all connections are closed, mark out of call
+      if (Object.keys(peerConnections.current).length === 0) {
+        inCallRef.current = false
+      }
+      
       // If the user left the room (not just the call), update room users
       if (userId && !roomUsers.some(user => user.id === userId)) {
         console.log(`User ${userId} appears to have left the room entirely`);
@@ -1582,8 +1590,13 @@ const Compiler = ({ roomId, userName }) => {
 
       // Notify other users that this user is ready for call
       if (socketRef.current && roomId) {
+        if (window._lastReadyEmit && Date.now() - window._lastReadyEmit < 3000) {
+          console.log('Throttling duplicate userReadyForCall emit');
+        } else {
+          window._lastReadyEmit = Date.now();
         console.log(`Notifying other users in room ${roomId} that we're ready for call`);
-        socketRef.current.emit("userReadyForCall", { roomId });
+          socketRef.current.emit("userReadyForCall", { roomId });
+        }
         
         // Show notification that video is active
         setOutput("Video call started successfully! Connecting to other participants...");
@@ -1674,6 +1687,8 @@ const Compiler = ({ roomId, userName }) => {
       setOutput("Accessing camera and microphone...");
       setShowOutput(true);
 
+      inCallRef.current = true
+
       // Start our own video with optimized quality constraints that work better across devices
       const constraints = {
         video: {
@@ -1747,7 +1762,12 @@ const Compiler = ({ roomId, userName }) => {
         
         // This is for joining an active room call
         // Signal that we're ready for call to everyone in the room
-        socketRef.current.emit("userReadyForCall", { roomId });
+        if (window._lastReadyEmit && Date.now() - window._lastReadyEmit < 3000) {
+          console.log('Throttling duplicate userReadyForCall emit');
+        } else {
+          window._lastReadyEmit = Date.now();
+          socketRef.current.emit("userReadyForCall", { roomId });
+        }
         
         setOutput(`You joined the active video call`);
         setShowOutput(true);
@@ -1772,7 +1792,12 @@ const Compiler = ({ roomId, userName }) => {
               console.log("Retrying peer connection with alternative approach...");
               
               // First notify the caller we're ready to try again
-              socketRef.current.emit("userReadyForCall", { roomId });
+              if (window._lastReadyEmit && Date.now() - window._lastReadyEmit < 3000) {
+                console.log('Throttling duplicate userReadyForCall emit');
+              } else {
+                window._lastReadyEmit = Date.now();
+                socketRef.current.emit("userReadyForCall", { roomId });
+              }
               
               // Wait a moment for the signal to reach the other party
               await new Promise(resolve => setTimeout(resolve, 1500));
@@ -1848,6 +1873,7 @@ const Compiler = ({ roomId, userName }) => {
 
     console.log("Call rejected from:", incomingCall.userName)
     setIncomingCall(null)
+    inCallRef.current = false
     setOutput(`Call from ${incomingCall.userName} declined`)
     setShowOutput(true)
     setTimeout(() => setShowOutput(false), 3000)
@@ -2173,10 +2199,15 @@ console.log("white");
           
           // Wait a moment before reconnecting to allow server state to update
           setTimeout(() => {
-            socketRef.current.emit("userReadyForCall", { 
-              roomId, 
-              isReconnecting: true 
-            });
+            if (window._lastReadyEmit && Date.now() - window._lastReadyEmit < 3000) {
+              console.log('Throttling duplicate userReadyForCall emit');
+            } else {
+              window._lastReadyEmit = Date.now();
+              socketRef.current.emit("userReadyForCall", { 
+                roomId, 
+                isReconnecting: true 
+              });
+            }
           }, 1000);
         }
       }
@@ -2253,10 +2284,15 @@ console.log("white");
         });
         
         setTimeout(() => {
-          socketRef.current.emit("userReadyForCall", { 
-            roomId, 
-            isReconnecting: true 
-          });
+          if (window._lastReadyEmit && Date.now() - window._lastReadyEmit < 3000) {
+            console.log('Throttling duplicate userReadyForCall emit');
+          } else {
+            window._lastReadyEmit = Date.now();
+            socketRef.current.emit("userReadyForCall", { 
+              roomId, 
+              isReconnecting: true 
+            });
+          }
           window._needsReconnect = false;
         }, 1000);
       }
@@ -2595,6 +2631,13 @@ console.log("white");
     // WebRTC Signaling Events with enhanced reliability
     // Handle user ready for call (incoming call notification)
     socketRef.current.on("userReadyForCall", async ({ userId, userName: callerName }) => {
+      // Ignore invites while already in call
+      if (inCallRef.current) return
+      // Drop duplicate invites within 5s window
+      const now = Date.now()
+      if (lastInviteFromRef.current === userId && now - lastInviteAtRef.current < 5000) return
+      lastInviteFromRef.current = userId
+      lastInviteAtRef.current = now
       console.log("User ready for call:", userId, callerName);
       
       // Remember that this room has an active call
@@ -2616,8 +2659,8 @@ console.log("white");
             window._callRingtone.currentTime = 0;
           }
           
-          // Set incoming call state with caller details
-          setIncomingCall({ from: userId, userName: callerName });
+      // Set incoming call state with caller details (single active invite)
+      setIncomingCall({ from: userId, userName: callerName });
           
           // Show prominent notification in the UI
           setOutput(`📞 Incoming video call from ${callerName}! Click "Accept" to join the meeting.`);

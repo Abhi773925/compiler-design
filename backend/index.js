@@ -103,6 +103,15 @@ app.use((err, req, res, next) => {
 // Store room users and track rooms with active calls
 const roomUsers = new Map();
 const roomsWithActiveCalls = new Set();
+const activeCallParticipants = new Map(); // Track who is in each call
+
+// Helper function to get user from a room
+function getUserFromRoom(roomId, socketId) {
+  if (roomUsers.has(roomId)) {
+    return roomUsers.get(roomId).get(socketId);
+  }
+  return null;
+}
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -358,6 +367,37 @@ io.on("connection", (socket) => {
     // Track that this room has an active call
     roomsWithActiveCalls.add(roomId);
     
+    // Track this user as a call participant
+    if (!activeCallParticipants.has(roomId)) {
+      activeCallParticipants.set(roomId, new Set());
+    }
+    activeCallParticipants.get(roomId).add(socket.id);
+    
+    // Get all existing participants in the call
+    const existingParticipants = [];
+    if (activeCallParticipants.has(roomId)) {
+      activeCallParticipants.get(roomId).forEach(participantId => {
+        if (participantId !== socket.id) {
+          const user = getUserFromRoom(roomId, participantId);
+          if (user) {
+            existingParticipants.push({
+              userId: participantId,
+              userName: user.name
+            });
+          }
+        }
+      });
+    }
+    
+    // Send list of existing call participants to the new user
+    if (existingParticipants.length > 0) {
+      socket.emit("existingCallParticipants", {
+        participants: existingParticipants
+      });
+      console.log(`Sent ${existingParticipants.length} existing participants to ${socket.userName}`);
+    }
+    
+    // Notify others about this new participant
     socket.to(roomId).emit("userReadyForCall", {
       userId: socket.id,
       userName: socket.userName,
@@ -367,56 +407,80 @@ io.on("connection", (socket) => {
 
   // Handle WebRTC offer
   socket.on("webrtc-offer", ({ offer, to, roomId }) => {
-    io.to(to).emit("webrtc-offer", {
-      offer: offer,
-      from: socket.id,
-      userName: socket.userName,
-    });
-    console.log(`WebRTC offer sent from ${socket.id} to ${to}`);
+    try {
+      io.to(to).emit("webrtc-offer", {
+        offer: offer,
+        from: socket.id,
+        userName: socket.userName,
+        roomId: roomId
+      });
+      console.log(`WebRTC offer sent from ${socket.userName} (${socket.id}) to ${to}`);
+    } catch (error) {
+      console.error(`Error sending WebRTC offer from ${socket.id} to ${to}:`, error);
+      socket.emit("webrtcError", {
+        type: "offer-failed",
+        message: "Failed to send offer",
+        toUser: to
+      });
+    }
   });
 
   // Handle WebRTC answer
   socket.on("webrtc-answer", ({ answer, to, roomId }) => {
-    io.to(to).emit("webrtc-answer", {
-      answer: answer,
-      from: socket.id,
-      userName: socket.userName,
-    });
-    console.log(`WebRTC answer sent from ${socket.id} to ${to}`);
+    try {
+      io.to(to).emit("webrtc-answer", {
+        answer: answer,
+        from: socket.id,
+        userName: socket.userName,
+        roomId: roomId
+      });
+      console.log(`WebRTC answer sent from ${socket.userName} (${socket.id}) to ${to}`);
+    } catch (error) {
+      console.error(`Error sending WebRTC answer from ${socket.id} to ${to}:`, error);
+      socket.emit("webrtcError", {
+        type: "answer-failed",
+        message: "Failed to send answer",
+        toUser: to
+      });
+    }
   });
 
   // Handle ICE candidate
   socket.on("ice-candidate", ({ candidate, to, roomId }) => {
-    io.to(to).emit("ice-candidate", {
-      candidate: candidate,
-      from: socket.id,
-      userName: socket.userName,
-    });
+    try {
+      io.to(to).emit("ice-candidate", {
+        candidate: candidate,
+        from: socket.id,
+        userName: socket.userName,
+        roomId: roomId
+      });
+      // Uncomment for detailed ICE candidate logging
+      // console.log(`ICE candidate sent from ${socket.userName} (${socket.id}) to ${to}`);
+    } catch (error) {
+      console.error(`Error sending ICE candidate from ${socket.id} to ${to}:`, error);
+    }
   });
 
   // Handle user left call
   socket.on("userLeftCall", ({ roomId }) => {
+    // Remove user from active call participants
+    if (activeCallParticipants.has(roomId)) {
+      activeCallParticipants.get(roomId).delete(socket.id);
+      
+      // If no participants left, mark call as inactive
+      if (activeCallParticipants.get(roomId).size === 0) {
+        activeCallParticipants.delete(roomId);
+        roomsWithActiveCalls.delete(roomId);
+        console.log(`Call ended in room ${roomId} - no participants remaining`);
+      }
+    }
+    
+    // Notify others that this user left the call
     socket.to(roomId).emit("userLeftCall", {
       userId: socket.id,
       userName: socket.userName,
     });
     console.log(`${socket.userName} left the call in room: ${roomId}`);
-    
-    // Check if anyone is still in the call
-    const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
-    let callStillActive = false;
-    
-    if (socketsInRoom) {
-      // We need to check if any remaining user is in a call
-      // This is an approximation - we'll keep the room marked as having a call
-      // Better to assume call is still active than to falsely remove the marker
-      callStillActive = true;
-    }
-    
-    if (!callStillActive) {
-      // Remove the room from active calls list if everyone left
-      roomsWithActiveCalls.delete(roomId);
-    }
   });
 
   // Request current code state when joining
@@ -463,6 +527,27 @@ io.on("connection", (socket) => {
         }
       } catch (error) {
         console.error("Error updating session on disconnect:", error);
+      }
+    }
+
+    // Clean up WebRTC call participants
+    if (socket.currentRoom) {
+      if (activeCallParticipants.has(socket.currentRoom)) {
+        // Remove this user from active call participants
+        activeCallParticipants.get(socket.currentRoom).delete(socket.id);
+        
+        // Notify others that this user left the call
+        socket.to(socket.currentRoom).emit("userLeftCall", {
+          userId: socket.id,
+          userName: socket.userName,
+        });
+        
+        // If no participants left in call, clean up
+        if (activeCallParticipants.get(socket.currentRoom).size === 0) {
+          activeCallParticipants.delete(socket.currentRoom);
+          roomsWithActiveCalls.delete(socket.currentRoom);
+          console.log(`Call ended in room ${socket.currentRoom} - all participants disconnected`);
+        }
       }
     }
 
@@ -517,6 +602,33 @@ io.on("connection", (socket) => {
 
     socket.currentRoom = null;
     console.log(`${socket.userName} (${socket.id}) left room: ${roomId}`);
+  });
+
+  // Handle raise hand
+  socket.on('raiseHand', ({ roomId, timestamp }) => {
+    const user = getUserFromRoom(roomId, socket.id);
+    
+    if (user) {
+      // Broadcast to everyone else in the room
+      socket.to(roomId).emit('userRaisedHand', {
+        userId: socket.id,
+        userName: user.name,
+        timestamp
+      });
+    }
+  });
+
+  // Handle lower hand
+  socket.on('lowerHand', ({ roomId }) => {
+    const user = getUserFromRoom(roomId, socket.id);
+    
+    if (user) {
+      // Broadcast to everyone else in the room
+      socket.to(roomId).emit('userLoweredHand', {
+        userId: socket.id,
+        userName: user.name
+      });
+    }
   });
 });
 

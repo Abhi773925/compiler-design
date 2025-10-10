@@ -3236,6 +3236,23 @@ console.log("white");
       monacoRef.current = editor
       editorCreatedRef.current = true
       setEditorReady(true)
+
+      // Emit code changes instantly to room (debounced only for DB save elsewhere)
+      editor.onDidChangeModelContent(() => {
+        if (!socketRef.current || !roomIdRef.current) return
+        const currentValue = editor.getValue()
+        setCode(currentValue)
+        // Avoid echo loops
+        if (isRemoteChange.current) {
+          isRemoteChange.current = false
+          return
+        }
+        socketRef.current.emit("codeChange", {
+          roomId: roomIdRef.current,
+          code: currentValue,
+          language: languageRef.current,
+        })
+      })
     }
 
     if (window.monaco) {
@@ -3353,11 +3370,11 @@ console.log("white");
         handleWhiteboardChange()
       }
 
-      // Debounce changes to avoid too many socket emissions
+      // Light debounce for near-instant updates
       let changeTimeout
       const unsubscribe = tldrawEditor.store.listen(() => {
         clearTimeout(changeTimeout)
-        changeTimeout = setTimeout(handleChange, 300)
+        changeTimeout = setTimeout(handleChange, 60)
       })
       tldrawUnsubRef.current = unsubscribe
     }

@@ -1,3 +1,15 @@
+## TURN configuration for reliable video calling
+
+For reliable WebRTC connections across strict NATs and corporate networks, configure a TURN server via environment variables (Vite):
+
+```
+VITE_TURN_URL=turn:your-turn-host:3478
+VITE_TURN_USERNAME=yourTurnUser
+VITE_TURN_CREDENTIAL=yourTurnPassword
+```
+
+These values are optional; when set, the app will automatically include the TURN server alongside STUN servers for all peer connections.
+
 # PrepMate - Collaborative Coding Platform
 
 ## 🚀 Overview

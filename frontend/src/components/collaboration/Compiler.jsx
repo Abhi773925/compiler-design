@@ -336,18 +336,31 @@ const Compiler = ({ roomId, userName }) => {
     }
   }
 
-  // WebRTC Configuration with multiple STUN servers for better connectivity
-  const iceServers = {
-    iceServers: [
+  // WebRTC ICE configuration builder - includes inline TURN for reliability
+  const buildIceConfig = () => {
+    const baseServers = [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun1.l.google.com:19302" },
       { urls: "stun:stun2.l.google.com:19302" },
       { urls: "stun:stun3.l.google.com:19302" },
-      { urls: "stun:stun4.l.google.com:19302" },
-      // Add TURN servers for production environments
-      // { urls: 'turn:turn.example.org', username: 'user', credential: 'pass' }
-    ],
-    iceCandidatePoolSize: 10
+      { urls: "stun:stun4.l.google.com:19302" }
+    ]
+    // Inline TURN configuration so users don't need env vars
+    // Replace these with your TURN server details as needed
+    const inlineTurn = {
+      url: "turn:turn.xirsys.com:3478?transport=udp",
+      username: "abhi778189",
+      credential: "13e603c0-a5c3-11f0-8f82-0242ac140006"
+    };
+    
+    if (inlineTurn.url && inlineTurn.username && inlineTurn.credential) {
+      baseServers.push({ urls: inlineTurn.url, username: inlineTurn.username, credential: inlineTurn.credential })
+    }
+
+    return {
+      iceServers: baseServers,
+      iceCandidatePoolSize: 10
+    }
   }
   
   // Utility function to handle WebRTC connection timeout detection and recovery
@@ -509,18 +522,9 @@ const Compiler = ({ roomId, userName }) => {
     try {
       console.log(`Creating peer connection with ${userId}, initiator: ${isInitiator}`);
       
-      // Enhanced ICE servers configuration with multiple STUN servers and connection options
+      // Build ICE servers (including optional TURN) with connection options
       const iceServersConfig = {
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" },
-          { urls: "stun:stun3.l.google.com:19302" },
-          { urls: "stun:stun4.l.google.com:19302" },
-          // Add TURN servers for production to handle NAT traversal failures
-          // { urls: "turn:your-turn-server.com:3478", username: "username", credential: "password" }
-        ],
-        iceCandidatePoolSize: 10,
+        ...buildIceConfig(),
         // Enhanced connection options for improved reliability
         iceTransportPolicy: "all", // Use both UDP and TCP transports
         bundlePolicy: "max-bundle", // Bundle all media tracks to optimize connection
@@ -553,8 +557,22 @@ const Compiler = ({ roomId, userName }) => {
             break;
             
           case 'disconnected':
-            console.log(`ICE connection disconnected with ${userId}, will wait for recovery`);
-            // The connection might recover automatically, so we wait
+            console.log(`ICE connection disconnected with ${userId}, scheduling debounced restart check`);
+            // Debounced reconnect: if remains disconnected for > 3s, try gentle renegotiation
+            clearTimeout(pc._disconnectedTimer);
+            pc._disconnectedTimer = setTimeout(async () => {
+              if (!peerConnections.current[userId] || pc.iceConnectionState !== 'disconnected') return;
+              try {
+                if (isInitiator) {
+                  console.log(`Still disconnected with ${userId}, attempting gentle renegotiation`);
+                  const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+                  await pc.setLocalDescription(offer);
+                  socketRef.current.emit("webrtc-offer", { offer, to: userId, roomId, isRestart: false });
+                }
+              } catch (e) {
+                console.warn(`Gentle renegotiation failed with ${userId}:`, e);
+              }
+            }, 3000);
             break;
             
           case 'failed':
@@ -624,6 +642,16 @@ const Compiler = ({ roomId, userName }) => {
           case 'closed':
             console.log(`ICE connection closed with ${userId}`);
             cleanupPeerConnection(userId);
+            // Optionally recreate if user remains in room and we were initiator
+            if (isInitiator && roomUsers.some(user => user.id === userId)) {
+              setTimeout(() => {
+                if (!peerConnections.current[userId]) {
+                  console.log(`Recreating connection with ${userId} after close`);
+                  createPeerConnection(userId, true, screenTrack)
+                    .catch(e => console.error(`Failed to recreate connection with ${userId}:`, e));
+                }
+              }, 2000);
+            }
             break;
         }
       };
@@ -652,6 +680,50 @@ const Compiler = ({ roomId, userName }) => {
               }
             }, 8000);
           }
+        }
+      };
+
+      // Network change handlers to improve resilience
+      const handleOnline = async () => {
+        if (!peerConnections.current[userId]) return;
+        console.log(`Network online, attempting renegotiation with ${userId}`);
+        try {
+          if (isInitiator) {
+            const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+            await pc.setLocalDescription(offer);
+            socketRef.current.emit("webrtc-offer", { offer, to: userId, roomId });
+          }
+        } catch (e) {
+          console.warn(`Renegotiation after online failed with ${userId}:`, e);
+        }
+      };
+
+      const handleVisibility = async () => {
+        if (!peerConnections.current[userId]) return;
+        if (document.visibilityState === 'visible') {
+          console.log(`Tab visible, checking connection with ${userId}`);
+          if (pc.iceConnectionState === 'disconnected' && isInitiator) {
+            try {
+              const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+              await pc.setLocalDescription(offer);
+              socketRef.current.emit("webrtc-offer", { offer, to: userId, roomId });
+            } catch (e) {
+              console.warn(`Visibility renegotiation failed with ${userId}:`, e);
+            }
+          }
+        }
+      };
+
+      window.addEventListener('online', handleOnline);
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      // Ensure cleanup removes listeners
+      const originalCleanup = pc.onconnectionstatechange;
+      pc.onconnectionstatechange = (event) => {
+        if (originalCleanup) originalCleanup(event);
+        if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+          window.removeEventListener('online', handleOnline);
+          document.removeEventListener('visibilitychange', handleVisibility);
         }
       };
       

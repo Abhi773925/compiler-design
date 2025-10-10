@@ -47,6 +47,7 @@ const Compiler = ({ roomId, userName }) => {
   const isRemoteChange = useRef(false)
   const languageRef = useRef(language) // Add ref for language
   const roomIdRef = useRef(roomId) // Add ref for roomId
+  const fileTabsRef = useRef(null) // Ref for FilesTab component
   // Shared files state
   const [activeFileId, setActiveFileId] = useState('main.js')
   const [files, setFiles] = useState({}) // {fileId: { name, content }}
@@ -58,9 +59,17 @@ const Compiler = ({ roomId, userName }) => {
       try {
         console.log('Fetching saved files for user:', user.name || user.id);
         const files = await getUserFiles();
+        console.log('Loaded saved files:', files);
+        
         if (Array.isArray(files)) {
           setSavedFiles(files);
           console.log('Fetched saved files:', files.length);
+          
+          // If this is a component that can show files, notify it of the update
+          if (fileTabsRef.current && typeof fileTabsRef.current.refreshFiles === 'function') {
+            console.log('Notifying FileTabs component of file update');
+            fileTabsRef.current.refreshFiles();
+          }
         } else {
           console.error('Unexpected response format from getUserFiles:', files);
           setSavedFiles([]);
@@ -74,6 +83,7 @@ const Compiler = ({ roomId, userName }) => {
       }
     } else {
       console.log('Not fetching saved files - user not logged in');
+      setSavedFiles([]); // Clear saved files if user is not logged in
     }
   };
   
@@ -244,6 +254,18 @@ const Compiler = ({ roomId, userName }) => {
     if (user && user.id) {
       console.log('Compiler: Fetching saved files after user change');
       fetchSavedFiles();
+      
+      // Set a periodic refresh to keep saved files up-to-date
+      const refreshInterval = setInterval(() => {
+        if (user && user.id) {
+          console.log('Periodic refresh of saved files');
+          fetchSavedFiles();
+        }
+      }, 30000); // Refresh every 30 seconds
+      
+      return () => {
+        clearInterval(refreshInterval);
+      };
     }
   }, [user]);
   const fileInputRef = useRef(null)
@@ -3398,18 +3420,24 @@ console.log("white");
       if (user && user.id) {
         try {
           console.log('Saving uploaded file to database');
-          savedFile = await saveFileToDatabase({
+          
+          // Prepare file data for saving
+          const fileData = {
             name: file.name,
             content: text,
             source: 'local-upload',
             metadata: { 
               size: file.size,
               type: file.type,
+              language: detectedLanguage,
               lastModified: new Date(file.lastModified).toISOString()
             }
-          });
+          };
           
-          if (savedFile) {
+          // Save the file to the database
+          savedFile = await saveFileToDatabase(fileData);
+          
+          if (savedFile && savedFile._id) {
             console.log('File saved to database successfully:', savedFile);
             savedToDatabase = true;
             
@@ -3422,6 +3450,27 @@ console.log("white");
                 savedAt: new Date().toISOString()
               }
             }));
+            
+            // Update saved files list immediately
+            setSavedFiles(prev => {
+              // If the file already exists by ID, update it
+              if (Array.isArray(prev)) {
+                const exists = prev.some(f => f._id === savedFile._id);
+                
+                if (exists) {
+                  return prev.map(f => f._id === savedFile._id ? savedFile : f);
+                } else {
+                  return [...prev, savedFile];
+                }
+              } else {
+                return [savedFile];
+              }
+            });
+            
+            // Force refresh saved files list
+            setTimeout(() => {
+              fetchSavedFiles();
+            }, 500);
           }
         } catch (saveError) {
           console.error('Error saving file to database:', saveError);
@@ -4074,6 +4123,7 @@ console.log("white");
                 {/* Files Tab Content */}
                 {activeTab === "files" && (
                   <FilesTab 
+                    ref={fileTabsRef}
                     activeFileId={activeFileId}
                     files={files}
                     setActiveFileId={setActiveFileId}

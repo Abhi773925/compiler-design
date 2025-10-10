@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { getUserFiles, getFileById } from '../../services/fileService';
 
-const FilesTab = ({ 
+const FilesTab = forwardRef(({ 
   activeFileId, 
   files, 
   setActiveFileId, 
@@ -11,7 +11,7 @@ const FilesTab = ({
   onOpenGitHubModal, 
   roomId,
   handleUploadFile
-}) => {
+}, ref) => {
   const fileInputRef = useRef(null);
   const { user } = useAuth();
   const [savedFiles, setSavedFiles] = useState([]);
@@ -269,6 +269,26 @@ const FilesTab = ({
     </div>
   );
 
+  // Expose methods to parent component using ref
+  useImperativeHandle(ref, () => ({
+    refreshFiles: () => {
+      console.log('FilesTab: refreshFiles called');
+      if (user) {
+        loadSavedFiles();
+      }
+    },
+    setSavedFiles: (files) => {
+      setSavedFiles(files);
+    },
+    getCurrentView: () => view,
+    setCurrentView: (newView) => {
+      setView(newView);
+      if (newView === 'saved' && user) {
+        loadSavedFiles();
+      }
+    }
+  }));
+
   return (
     <div className="p-2">
       {/* Tab navigation */}
@@ -345,6 +365,6 @@ const FilesTab = ({
       )}
     </div>
   );
-};
+});
 
 export default FilesTab;

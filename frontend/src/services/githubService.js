@@ -12,7 +12,7 @@ const GITHUB_API_BASE = 'https://api.github.com';
  */
 export const authenticateWithGithub = () => {
   // GitHub OAuth client ID - hardcoded for production
-  const clientId = '1bf3ad4416259160390493ad8483bebc642d2f45';
+  const clientId = 'Ov23likZXqyctlogOjrD';
   
   // Redirect URI - hardcoded for production
   const redirectUri = 'https://prep-mates.vercel.app/github-callback';
@@ -50,13 +50,17 @@ export const handleGithubCallback = async (code, state) => {
   // Clear the stored state
   localStorage.removeItem('github_auth_state');
   
-  // Exchange code for access token through backend
+  // Exchange code for access token through backend with hardcoded credentials
   const response = await fetch('https://prep-mates-backend.vercel.app/api/github/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ 
+      code,
+      clientId: 'Ov23likZXqyctlogOjrD',
+      clientSecret: 'b856bc22601b3161a873aab4224fa1147735f717'
+    }),
   });
   
   const data = await response.json();

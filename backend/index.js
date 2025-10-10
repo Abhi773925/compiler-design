@@ -312,7 +312,7 @@ io.on("connection", (socket) => {
   });
 
   // Upload a file (metadata + content in base64 or text)
-  socket.on("uploadFile", async ({ roomId, fileId, name, mime, size, content, uploadedBy, uploaderName }) => {
+  socket.on("uploadFile", async ({ roomId, fileId, name, mime, size, content, uploadedBy, uploaderName, source, metadata }) => {
     try {
       if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
       if (!roomFileMeta.has(roomId)) roomFileMeta.set(roomId, new Map());
@@ -329,7 +329,9 @@ io.on("connection", (socket) => {
         mime: mime || "text/plain", 
         size: size || 0,
         uploadedBy: uploadedBy || socket.userId,
-        uploaderName: uploaderName || socket.userName
+        uploaderName: uploaderName || socket.userName,
+        source: source || "upload", // Track source of file (upload, github, cached)
+        metadata: metadata || {}    // Store additional metadata
       });
       
       io.to(roomId).emit("fileUploaded", { 
@@ -338,7 +340,8 @@ io.on("connection", (socket) => {
         mime, 
         size, 
         uploadedBy: uploadedBy || socket.userId,
-        uploaderName: uploaderName || socket.userName
+        uploaderName: uploaderName || socket.userName,
+        source: source || "upload"
       });
       
       io.to(roomId).emit("fileContentSnapshot", { 
@@ -361,7 +364,9 @@ io.on("connection", (socket) => {
             size: size || 0,
             uploadedBy: uploadedBy || socket.userId,
             uploaderName: uploaderName || socket.userName,
-            uploadedAt: new Date()
+            uploadedAt: new Date(),
+            source: source || "upload",
+            metadata: metadata || {}
           };
           
           if (fileIndex !== -1 && fileIndex !== undefined) {
@@ -375,7 +380,33 @@ io.on("connection", (socket) => {
           
           session.lastActivity = new Date();
           await session.save();
-          console.log(`File '${name}' saved to database for room ${roomId}`);
+          console.log(`File '${name}' (${source || 'upload'}) saved to database for room ${roomId}`);
+        } else {
+          // If session doesn't exist, create it
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 30); // 30 days expiry
+          
+          const newSession = new Session({
+            roomId,
+            creatorName: socket.userName || "Anonymous",
+            creatorUserId: socket.userId || null,
+            expiresAt,
+            files: [{
+              fileId,
+              name: name || fileId,
+              content: content || "",
+              mime: mime || "text/plain",
+              size: size || 0,
+              uploadedBy: uploadedBy || socket.userId,
+              uploaderName: uploaderName || socket.userName,
+              uploadedAt: new Date(),
+              source: source || "upload",
+              metadata: metadata || {}
+            }]
+          });
+          
+          await newSession.save();
+          console.log(`New session created with file '${name}' for room ${roomId}`);
         }
       } catch (dbError) {
         console.error("Error saving file to database:", dbError);

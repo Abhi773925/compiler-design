@@ -452,6 +452,50 @@ const Compiler = ({ roomId, userName }) => {
       filesCache[fileSha].lastAccessed = Date.now();
       localStorage.setItem('github_files_cache', JSON.stringify(filesCache));
       
+      // If in a room, save to server database
+      if (socketRef.current && roomId) {
+        // Determine MIME type from file extension
+        const extension = cachedFile.name.split('.').pop().toLowerCase();
+        const langMap = {
+          'js': 'javascript',
+          'py': 'python',
+          'java': 'java',
+          'cpp': 'cpp',
+          'c': 'c',
+          'cs': 'csharp',
+          'ts': 'typescript',
+          'go': 'go',
+          'rs': 'rust',
+          'php': 'php',
+          'rb': 'ruby',
+          'kt': 'kotlin',
+          'swift': 'swift',
+          'r': 'r',
+          'sql': 'sql',
+        };
+        
+        // Save to database via socket
+        socketRef.current.emit("uploadFile", {
+          roomId,
+          fileId,
+          name: cachedFile.name,
+          content: cachedFile.content,
+          mime: `text/${langMap[extension] || 'plain'}`,
+          size: cachedFile.content.length,
+          uploadedBy: socketRef.current.id,
+          uploaderName: user?.name || userName || "Anonymous",
+          source: "cached",
+          metadata: {
+            originalSha: fileSha,
+            repo: cachedFile.repo,
+            path: cachedFile.path
+          }
+        });
+        
+        // Set as active file
+        socketRef.current.emit("setActiveFile", { roomId, fileId });
+      }
+      
       // Notify user
       setOutput(`Loaded cached file: ${cachedFile.name}`);
       setShowOutput(true);
@@ -581,8 +625,16 @@ const Compiler = ({ roomId, userName }) => {
           fileId,
           name: fileData.name,
           content: fileData.content,
+          mime: `text/${langMap[extension] || 'plain'}`,
+          size: validatedContent.length,
           uploadedBy: socketRef.current.id,
           uploaderName: user?.name || userName || "Anonymous",
+          source: "github",
+          metadata: {
+            repo: fileData.repo,
+            path: fileData.path,
+            sha: fileData.sha
+          }
         })
         
         // Set as active file for everyone

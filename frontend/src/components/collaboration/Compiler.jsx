@@ -41,6 +41,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   const [gitHubLoadModalOpen, setGitHubLoadModalOpen] = useState(false) // Toggle GitHub load modal
   const [gitHubSaveModalOpen, setGitHubSaveModalOpen] = useState(false) // Toggle GitHub save modal
   const [tldrawEditor, setTldrawEditor] = useState(null) // tldraw editor instance
+  const [showExitWarning, setShowExitWarning] = useState(false) // Toggle exit warning dialog
   const tldrawUnsubRef = useRef(null)
   const whiteboardOpenedByOthers = useRef(true) // Track if whiteboard was opened by another user
   const isApplyingRemoteRef = useRef(false)
@@ -565,6 +566,11 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   }
 
   const handleLogout = () => {
+    setShowExitWarning(true)
+  }
+
+  // Handle final exit after confirmation
+  const handleFinalExit = () => {
     // Disconnect from socket
     if (socketRef.current) {
       socketRef.current.emit("leaveRoom", { roomId })
@@ -573,6 +579,11 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
     // Navigate to homepage
     navigate("/")
+  }
+
+  // Handle cancel exit
+  const handleCancelExit = () => {
+    setShowExitWarning(false)
   }
 
   const runCode = async () => {
@@ -5024,6 +5035,66 @@ console.log("white");
             language={language}
             fileName={activeFileId}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Exit Warning Modal */}
+      <AnimatePresence>
+        {showExitWarning && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleCancelExit}
+              className="fixed inset-0 bg-black bg-opacity-50 z-50"
+            />
+
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            >
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-800">
+                <div className="mb-4">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Exit without saving?
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Your changes will be lost. Would you like to save your code to GitHub before exiting?
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      setShowExitWarning(false);
+                      setGitHubSaveModalOpen(true);
+                    }}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                  >
+                    Save to GitHub
+                  </button>
+                  <button
+                    onClick={handleFinalExit}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                  >
+                    Exit without saving
+                  </button>
+                  <button
+                    onClick={handleCancelExit}
+                    className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

@@ -337,32 +337,34 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       setOutput('Auto-save enabled');
       setShowOutput(true);
       setTimeout(() => setShowOutput(false), 2000);
-      
-      // Update FilesTab component if it's available
-      if (fileTabsRef.current) {
-        try {
-          fileTabsRef.current.refreshFiles();
+
+      // Set up periodic refresh interval
+      const refreshInterval = setInterval(() => {
+        // Update FilesTab component if it's available
+        if (fileTabsRef.current) {
+          try {
+            fileTabsRef.current.refreshFiles();
+            
+            // If user is actively looking at saved files, show a brief notification when new files appear
+            const currentView = fileTabsRef.current.getCurrentView?.() || '';
+            if (currentView === 'saved') {
+              const currentFiles = fileTabsRef.current.getSavedFilesCount ? 
+                fileTabsRef.current.getSavedFilesCount() : 0;
               
-              // If user is actively looking at saved files, show a brief notification when new files appear
-              if (currentView === 'saved') {
-                const currentFiles = fileTabsRef.current.getSavedFilesCount ? 
+              // Check after refresh if there are new files
+              setTimeout(() => {
+                const newCount = fileTabsRef.current.getSavedFilesCount ? 
                   fileTabsRef.current.getSavedFilesCount() : 0;
                 
-                // Check after refresh if there are new files
-                setTimeout(() => {
-                  const newCount = fileTabsRef.current.getSavedFilesCount ? 
-                    fileTabsRef.current.getSavedFilesCount() : 0;
-                  
-                  if (newCount > currentFiles) {
-                    setOutput(`${newCount - currentFiles} new file(s) found in your saved files!`);
-                    setShowOutput(true);
-                    setTimeout(() => setShowOutput(false), 3000);
-                  }
-                }, 1000);
-              }
-            } catch (e) {
-              console.warn('Could not refresh FilesTab:', e);
+                if (newCount > currentFiles) {
+                  setOutput(`${newCount - currentFiles} new file(s) found in your saved files!`);
+                  setShowOutput(true);
+                  setTimeout(() => setShowOutput(false), 3000);
+                }
+              }, 1000);
             }
+          } catch (e) {
+            console.warn('Could not refresh FilesTab:', e);
           }
         }
       }, 5000); // Refresh every 5 seconds - reduced to be more responsive

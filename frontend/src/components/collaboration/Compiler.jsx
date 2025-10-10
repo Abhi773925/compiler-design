@@ -3352,6 +3352,10 @@ console.log("white");
     }
     
     try {
+      // Get current count before saving (if FilesTab component is available)
+      const currentCount = fileTabsRef.current?.getSavedFilesCount ? 
+        fileTabsRef.current.getSavedFilesCount() : 0;
+      
       const result = await saveFile(fileData);
       console.log('File saved to database:', result);
       
@@ -3373,6 +3377,18 @@ console.log("white");
       setTimeout(() => {
         console.log('Refreshing saved files after saving');
         fetchSavedFiles();
+        
+        // Check if there's a new file and show appropriate notification
+        if (fileTabsRef.current?.getSavedFilesCount) {
+          setTimeout(() => {
+            const newCount = fileTabsRef.current.getSavedFilesCount();
+            if (newCount > currentCount) {
+              setOutput(`File "${fileData.name}" has been saved to your account. You now have ${newCount} saved file${newCount > 1 ? 's' : ''}.`);
+              setShowOutput(true);
+              setTimeout(() => setShowOutput(false), 3000);
+            }
+          }, 1000);
+        }
       }, 500);
       
       return result.file;
@@ -3817,12 +3833,26 @@ console.log("white");
             // Update the FilesTab to show the saved files section and actively
             // direct user's attention to the saved files tab
             if (fileTabsRef.current && typeof fileTabsRef.current.showSavedFiles === 'function') {
+              // Get current count before refresh
+              const currentCount = fileTabsRef.current.getSavedFilesCount ? 
+                fileTabsRef.current.getSavedFilesCount() : 0;
+                
               setTimeout(() => {
                 fileTabsRef.current.showSavedFiles();
-                // Show a notification that explicitly tells the user where to find their saved files
-                setOutput(`File "${fileData.name}" has been saved! Check the "Saved Files" tab to see all your files.`);
-                setShowOutput(true);
-                setTimeout(() => setShowOutput(false), 5000);
+                
+                // Show a notification with badge count update
+                setTimeout(() => {
+                  const newCount = fileTabsRef.current.getSavedFilesCount ? 
+                    fileTabsRef.current.getSavedFilesCount() : 0;
+                    
+                  // Highlight the count increase
+                  const countMessage = newCount > currentCount ? 
+                    ` You now have ${newCount} saved file${newCount > 1 ? 's' : ''}.` : '';
+                    
+                  setOutput(`File "${fileData.name}" has been saved! Check the "Saved Files" tab to see all your files.${countMessage}`);
+                  setShowOutput(true);
+                  setTimeout(() => setShowOutput(false), 5000);
+                }, 500);
               }, 1000);
             }
           }

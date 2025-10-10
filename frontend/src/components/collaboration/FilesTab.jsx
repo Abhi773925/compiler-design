@@ -314,6 +314,11 @@ const FilesTab = forwardRef(({
     </div>
   );
 
+  // Get saved files count
+  const getSavedFilesCount = () => {
+    return savedFiles.length;
+  };
+
   // Expose methods to parent component using ref
   useImperativeHandle(ref, () => ({
     refreshFiles: () => {
@@ -338,7 +343,9 @@ const FilesTab = forwardRef(({
       if (user) {
         loadSavedFiles();
       }
-    }
+    },
+    // Method to get the count of saved files
+    getSavedFilesCount
   }));
 
   return (

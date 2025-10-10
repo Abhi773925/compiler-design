@@ -56,87 +56,181 @@ const Compiler = ({ roomId, userName }) => {
   const fetchSavedFiles = async () => {
     if (user && user.id) {
       try {
+        console.log('Fetching saved files for user:', user.name || user.id);
         const files = await getUserFiles();
-        setSavedFiles(files);
-        console.log('Fetched saved files:', files);
+        if (Array.isArray(files)) {
+          setSavedFiles(files);
+          console.log('Fetched saved files:', files.length);
+        } else {
+          console.error('Unexpected response format from getUserFiles:', files);
+          setSavedFiles([]);
+        }
       } catch (error) {
         console.error('Error fetching saved files:', error);
+        // Show error in UI
+        setOutput(`Error loading saved files: ${error.message}`);
+        setShowOutput(true);
+        setTimeout(() => setShowOutput(false), 5000);
       }
+    } else {
+      console.log('Not fetching saved files - user not logged in');
     }
   };
   
   // Function to load a saved file from the database
-  const loadSavedFile = async (fileId) => {
+  const loadSavedFile = async (fileData) => {
     try {
-      setOutput(`Loading file from database...`);
+      setOutput(`Loading file...`);
       setShowOutput(true);
       
-      const file = await getFileById(fileId);
-      
-      if (!file || !file.content) {
-        setOutput('Could not load the file. Try again later.');
-        return;
+      // If we received a file object with content directly, use it
+      if (fileData && fileData.content) {
+        console.log('Using provided file data with content');
+        const file = fileData;
+        
+        // Set the editor language based on file extension
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        const extensionToLanguage = {
+          js: 'javascript',
+          py: 'python',
+          java: 'java',
+          cpp: 'cpp',
+          c: 'c',
+          cs: 'csharp',
+          ts: 'typescript',
+          go: 'go',
+          rs: 'rust',
+          php: 'php',
+          rb: 'ruby',
+          kt: 'kotlin',
+          swift: 'swift',
+          r: 'r',
+          sql: 'sql',
+          html: 'html',
+          css: 'css',
+          md: 'markdown',
+          json: 'json',
+        };
+        
+        const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
+        
+        // Use provided fileId or create one
+        const localFileId = fileData.fileId || `db-${file._id || 'custom'}-${Date.now()}`;
+        
+        // Add to files state
+        setFiles(prev => ({ 
+          ...prev, 
+          [localFileId]: { 
+            name: file.name, 
+            content: file.content,
+            source: file.source || 'database',
+            dbId: file._id,
+            ...(file.metadata ? { metadata: file.metadata } : {}),
+            ...(file.fromGitHub ? { 
+              fromGitHub: true,
+              path: file.path,
+              repo: file.repo,
+              sha: file.sha
+            } : {})
+          } 
+        }));
+        
+        // Set as active file
+        setActiveFileId(localFileId);
+        
+        // Update editor content
+        if (monacoRef.current) {
+          isRemoteChange.current = true;
+          monacoRef.current.setValue(file.content);
+          setCode(file.content);
+        }
+        
+        // Update language
+        if (detectedLanguage) {
+          setLanguage(detectedLanguage);
+        }
+        
+        setOutput(`File "${file.name}" loaded successfully.`);
+        setShowOutput(true);
+        
+        return file;
+      } 
+      // If we just received a fileId, fetch it from the database
+      else if (typeof fileData === 'string') {
+        console.log('Loading file by ID from database:', fileData);
+        const fileId = fileData;
+        
+        const file = await getFileById(fileId);
+        
+        if (!file || !file.content) {
+          setOutput('Could not load the file. Try again later.');
+          return null;
+        }
+        
+        // Set the editor language based on file extension
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        const extensionToLanguage = {
+          js: 'javascript',
+          py: 'python',
+          java: 'java',
+          cpp: 'cpp',
+          c: 'c',
+          cs: 'csharp',
+          ts: 'typescript',
+          go: 'go',
+          rs: 'rust',
+          php: 'php',
+          rb: 'ruby',
+          kt: 'kotlin',
+          swift: 'swift',
+          r: 'r',
+          sql: 'sql',
+          html: 'html',
+          css: 'css',
+          md: 'markdown',
+          json: 'json',
+        };
+        
+        const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
+        
+        // Create a file entry
+        const localFileId = `db-${file._id}-${Date.now()}`;
+        
+        // Add to files state
+        setFiles(prev => ({ 
+          ...prev, 
+          [localFileId]: { 
+            name: file.name, 
+            content: file.content,
+            source: file.source || 'database',
+            dbId: file._id,
+            ...(file.metadata ? { metadata: file.metadata } : {})
+          } 
+        }));
+        
+        // Set as active file
+        setActiveFileId(localFileId);
+        
+        // Update editor content
+        if (monacoRef.current) {
+          isRemoteChange.current = true;
+          monacoRef.current.setValue(file.content);
+          setCode(file.content);
+        }
+        
+        // Update language
+        if (detectedLanguage) {
+          setLanguage(detectedLanguage);
+        }
+        
+        setOutput(`File "${file.name}" loaded successfully.`);
+        setShowOutput(true);
+        
+        return file;
       }
-      
-      // Set the editor language based on file extension
-      const fileExtension = file.name.split('.').pop().toLowerCase();
-      const extensionToLanguage = {
-        js: 'javascript',
-        py: 'python',
-        java: 'java',
-        cpp: 'cpp',
-        c: 'c',
-        cs: 'csharp',
-        ts: 'typescript',
-        go: 'go',
-        rs: 'rust',
-        php: 'php',
-        rb: 'ruby',
-        kt: 'kotlin',
-        swift: 'swift',
-        r: 'r',
-        sql: 'sql',
-        html: 'html',
-        css: 'css',
-        md: 'markdown',
-        json: 'json',
-      };
-      
-      const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
-      
-      // Create a file entry
-      const localFileId = `db-${file._id}-${Date.now()}`;
-      
-      // Add to files state
-      setFiles(prev => ({ 
-        ...prev, 
-        [localFileId]: { 
-          name: file.name, 
-          content: file.content,
-          source: file.source,
-          dbId: file._id
-        } 
-      }));
-      
-      // Set as active file
-      setActiveFileId(localFileId);
-      
-      // Update editor content
-      if (monacoRef.current) {
-        isRemoteChange.current = true;
-        monacoRef.current.setValue(file.content);
-        setCode(file.content);
+      else {
+        throw new Error('Invalid file data provided');
       }
-      
-      // Update language
-      if (detectedLanguage) {
-        setLanguage(detectedLanguage);
-      }
-      
-      setOutput(`File "${file.name}" loaded successfully.`);
-      setShowOutput(true);
-      
-      return file;
     } catch (error) {
       console.error('Error loading saved file:', error);
       setOutput(`Error loading file: ${error.message}`);
@@ -145,9 +239,12 @@ const Compiler = ({ roomId, userName }) => {
     }
   };
   
-  // Fetch saved files when user changes
+  // Fetch saved files when user changes or when files are saved
   useEffect(() => {
-    fetchSavedFiles();
+    if (user && user.id) {
+      console.log('Compiler: Fetching saved files after user change');
+      fetchSavedFiles();
+    }
   }, [user]);
   const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null) // For auto-scrolling chat
@@ -3204,6 +3301,10 @@ console.log("white");
       
       // Update saved files list
       setSavedFiles(prev => {
+        if (!Array.isArray(prev)) {
+          return [result.file];
+        }
+        
         const exists = prev.some(f => f._id === result.file._id);
         if (exists) {
           return prev.map(f => f._id === result.file._id ? result.file : f);
@@ -3211,6 +3312,12 @@ console.log("white");
           return [...prev, result.file];
         }
       });
+      
+      // Trigger a refresh of saved files after saving
+      setTimeout(() => {
+        console.log('Refreshing saved files after saving');
+        fetchSavedFiles();
+      }, 500);
       
       return result.file;
     } catch (error) {
@@ -3223,24 +3330,75 @@ console.log("white");
   
   const handleUploadFile = async (event) => {
     try {
-      const file = event?.target?.files?.[0]
-      if (!file) return
+      const file = event?.target?.files?.[0];
+      if (!file) return;
       
-      setOutput(`Reading file ${file.name}...`)
-      setShowOutput(true)
+      setOutput(`Reading file ${file.name}...`);
+      setShowOutput(true);
       
-      const text = await file.text()
-      const fileId = `${file.name}-${Date.now()}`
+      // Read file content
+      const text = await file.text();
+      const fileId = `local-${file.name.replace(/[^\w]/g, '-')}-${Date.now()}`;
+      
+      // Set the editor language based on file extension
+      const fileExtension = file.name.split('.').pop().toLowerCase();
+      const extensionToLanguage = {
+        js: 'javascript',
+        py: 'python',
+        java: 'java',
+        cpp: 'cpp',
+        c: 'c',
+        cs: 'csharp',
+        ts: 'typescript',
+        go: 'go',
+        rs: 'rust',
+        php: 'php',
+        rb: 'ruby',
+        kt: 'kotlin',
+        swift: 'swift',
+        r: 'r',
+        sql: 'sql',
+        html: 'html',
+        css: 'css',
+        md: 'markdown',
+        json: 'json',
+      };
+      
+      const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
       
       // Update local state
-      setFiles(prev => ({ ...prev, [fileId]: { name: file.name, content: text } }))
-      setActiveFileId(fileId)
+      setFiles(prev => ({ 
+        ...prev, 
+        [fileId]: { 
+          name: file.name, 
+          content: text,
+          source: 'local-upload',
+          uploadedAt: new Date().toISOString() 
+        } 
+      }));
+      
+      setActiveFileId(fileId);
+      
+      // Update editor content
+      if (monacoRef.current) {
+        isRemoteChange.current = true;
+        monacoRef.current.setValue(text);
+        setCode(text);
+      }
+      
+      // Update language
+      if (detectedLanguage) {
+        setLanguage(detectedLanguage);
+      }
       
       // Save to database if user is logged in
       let savedToDatabase = false;
+      let savedFile = null;
+      
       if (user && user.id) {
         try {
-          const savedFile = await saveFileToDatabase({
+          console.log('Saving uploaded file to database');
+          savedFile = await saveFileToDatabase({
             name: file.name,
             content: text,
             source: 'local-upload',
@@ -3254,6 +3412,16 @@ console.log("white");
           if (savedFile) {
             console.log('File saved to database successfully:', savedFile);
             savedToDatabase = true;
+            
+            // Update files object with the database ID
+            setFiles(prev => ({
+              ...prev, 
+              [fileId]: { 
+                ...prev[fileId],
+                dbId: savedFile._id,
+                savedAt: new Date().toISOString()
+              }
+            }));
           }
         } catch (saveError) {
           console.error('Error saving file to database:', saveError);
@@ -3271,7 +3439,13 @@ console.log("white");
           size: file.size,
           content: text,
           uploadedBy: user?._id || user?.id || socketRef.current.id,
-          uploaderName: user?.name || userName || "Anonymous"
+          uploaderName: user?.name || userName || "Anonymous",
+          source: "local-upload",
+          metadata: {
+            type: file.type,
+            lastModified: new Date(file.lastModified).toISOString(),
+            ...(savedFile ? { dbId: savedFile._id } : {})
+          }
         });
         
         // Set as active file
@@ -3280,7 +3454,7 @@ console.log("white");
       
       // Save to session database (for room persistence)
       if (roomIdRef.current) {
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com"
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com";
         await fetch(`${BACKEND_URL}/api/sessions/${roomIdRef.current}/files`, {
           method: "POST",
           headers: {
@@ -3295,6 +3469,9 @@ console.log("white");
             uploadedBy: user?._id || user?.id || socketRef.current?.id,
             uploaderName: user?.name || userName || "Anonymous"
           }),
+        }).catch(err => {
+          console.warn('Could not save file to session:', err);
+          // Non-critical error, don't block the flow
         });
       }
       
@@ -3305,6 +3482,12 @@ console.log("white");
         setOutput(`File "${file.name}" uploaded successfully!`);
       }
       setTimeout(() => setShowOutput(false), 3000);
+      
+      // Refresh saved files list if needed
+      if (savedToDatabase) {
+        console.log('Refreshing saved files list after upload');
+        fetchSavedFiles();
+      }
     } catch (e) {
       console.error('Error uploading file:', e);
       setOutput(`Error uploading file: ${e.message}`);
@@ -3497,42 +3680,83 @@ console.log("white");
       
       // Save to database if user is logged in
       if (user && user.id) {
+        // Prepare metadata for saving
+        const repoInfo = fileData.repo || {};
+        const metadata = {
+          path: fileData.path,
+          sha: fileData.sha,
+          size: validatedContent.length,
+          lastModified: new Date().toISOString(),
+          repoName: repoInfo.name || repoInfo.full_name || 'Unknown Repository',
+          repoOwner: repoInfo.owner?.login || 'Unknown Owner',
+          repoUrl: repoInfo.url || repoInfo.html_url || ''
+        };
+        
+        console.log('Saving GitHub file to database with metadata:', metadata);
+        
         saveFileToDatabase({
           name: fileData.name,
           content: validatedContent,
           source: 'github',
-          metadata: {
-            path: fileData.path,
-            repo: fileData.repo,
-            sha: fileData.sha,
-            size: validatedContent.length,
-            lastModified: new Date().toISOString()
-          }
+          metadata: metadata
         }).then(savedFile => {
           if (savedFile) {
             console.log('GitHub file saved to database:', savedFile);
             
             // Update saved files list to include the new file
             setSavedFiles(prev => {
-              const exists = prev.some(f => f._id === savedFile._id);
+              // If the file already exists by ID, update it
+              const exists = Array.isArray(prev) && prev.some(f => f._id === savedFile._id);
+              
               if (exists) {
                 return prev.map(f => f._id === savedFile._id ? savedFile : f);
               } else {
-                return [...prev, savedFile];
+                return Array.isArray(prev) ? [...prev, savedFile] : [savedFile];
               }
             });
             
+            // Update files object with the database ID
+            setFiles(prev => ({
+              ...prev, 
+              [fileId]: { 
+                ...prev[fileId],
+                dbId: savedFile._id,
+                savedAt: new Date().toISOString()
+              }
+            }));
+            
             setOutput(`File "${fileData.name}" loaded from GitHub and saved to your files.`);
             setShowOutput(true);
+            
+            // Refresh the saved files list
+            fetchSavedFiles();
           }
         }).catch(error => {
           console.error('Error saving GitHub file to database:', error);
-          setOutput(`File "${fileData.name}" loaded from GitHub, but couldn't be saved to your files.`);
+          setOutput(`File "${fileData.name}" loaded from GitHub, but couldn't be saved to your files: ${error.message}`);
           setShowOutput(true);
         });
       } else {
         setOutput(`File "${fileData.name}" loaded from GitHub. Log in to save it to your files.`);
         setShowOutput(true);
+      }
+      
+      // Cache GitHub file info in session storage for recovery
+      try {
+        sessionStorage.setItem('last_loaded_github_file', JSON.stringify({
+          name: fileData.name,
+          content: validatedContent,
+          path: fileData.path,
+          repo: {
+            name: fileData.repo?.name || 'Unknown',
+            owner: fileData.repo?.owner?.login || 'Unknown',
+            url: fileData.repo?.html_url || ''
+          },
+          sha: fileData.sha,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (cacheError) {
+        console.warn('Could not cache GitHub file in session storage:', cacheError);
       }
       
       // Emit to other users if in a room
@@ -3857,6 +4081,7 @@ console.log("white");
                     onOpenGitHubModal={openGitHubModal}
                     savedFiles={savedFiles}
                     roomId={roomId}
+                    handleUploadFile={handleUploadFile}
                   />
                 )}
 

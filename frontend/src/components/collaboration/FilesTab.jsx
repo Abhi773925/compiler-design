@@ -33,6 +33,7 @@ const FilesTab = ({
       console.log('Initial load of saved files');
       loadSavedFiles();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSavedFiles = async () => {
@@ -75,23 +76,28 @@ const FilesTab = ({
         const newFileId = `saved-${file._id}-${Date.now()}`;
         
         // Call the parent component's onLoadFile function with complete file data
-        onLoadFile({
+        const fileData = {
           fileId: newFileId,
           name: file.name,
           content: file.content,
           source: 'database',
+          _id: file._id,
           metadata: {
             originalId: file._id,
             ...(file.metadata || {})
-          },
-          // Add any GitHub-related info if this was a GitHub file
-          ...(file.source === 'github' && file.metadata ? {
-            fromGitHub: true,
-            path: file.metadata.path,
-            repo: file.metadata.repo,
-            sha: file.metadata.sha
-          } : {})
-        });
+          }
+        };
+        
+        // Add any GitHub-related info if this was a GitHub file
+        if (file.source === 'github' && file.metadata) {
+          fileData.fromGitHub = true;
+          fileData.path = file.metadata.path;
+          fileData.repo = file.metadata.repo;
+          fileData.sha = file.metadata.sha;
+        }
+        
+        console.log('Loading file with data:', fileData);
+        onLoadFile(fileData);
       } else {
         setError(`File "${file?.name || 'unknown'}" couldn't be loaded or has no content.`);
       }

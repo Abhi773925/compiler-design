@@ -12,7 +12,7 @@ const GITHUB_API_BASE = 'https://api.github.com';
  */
 export const authenticateWithGithub = () => {
   // GitHub OAuth client ID - hardcoded for production
-  const clientId = 'Iv1_IA_Iv0SHGByhx8OA8Ov23lik';
+  const clientId = 'Ov23likZXqyctlogOjrD';
   
   // Redirect URI - must match exactly what's configured in GitHub OAuth app settings
   const redirectUri = `${window.location.origin}/github-callback`;

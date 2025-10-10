@@ -14,8 +14,8 @@ export const authenticateWithGithub = () => {
   // GitHub OAuth client ID - hardcoded for production
   const clientId = 'Ov23likZXqyctlogOjrD';
   
-  // Redirect URI - hardcoded for production
-  const redirectUri = 'https://prep-mates.vercel.app/github-callback';
+  // Redirect URI - must match exactly what's configured in GitHub OAuth app settings
+  const redirectUri = 'https://prep-mates.vercel.app/auth/github/callback';
   
   // Scopes needed for repository operations
   const scope = 'repo';

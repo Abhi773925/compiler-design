@@ -34,6 +34,8 @@ const Compiler = ({ roomId, userName }) => {
   const [isAudioOn, setIsAudioOn] = useState(false)
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [incomingCall, setIncomingCall] = useState(null) // {from: userId, userName: string}
+  const [handRaised, setHandRaised] = useState(false) // For raise hand feature
+  const [raisedHands, setRaisedHands] = useState({}) // Track users with raised hands {userId: timestamp}
   const [messages, setMessages] = useState([]) // Chat messages [{id, userId, userName, message, timestamp}]
   const [newMessage, setNewMessage] = useState("") // Current message being typed
   const [activeUsers, setActiveUsers] = useState({}) // {userId: {typing: bool, lastActivity: timestamp}}
@@ -913,6 +915,46 @@ console.log("white");
       setShowOutput(true)
     }
   }
+  
+  // Toggle hand raise
+  const toggleHandRaise = () => {
+    const newHandRaised = !handRaised;
+    setHandRaised(newHandRaised);
+    
+    if (socketRef.current && roomId) {
+      if (newHandRaised) {
+        // Raise hand
+        const timestamp = new Date().getTime();
+        socketRef.current.emit("raiseHand", { 
+          roomId,
+          timestamp 
+        });
+        
+        // Update local state
+        setRaisedHands(prev => ({
+          ...prev,
+          [socketRef.current.id]: timestamp
+        }));
+        
+        setOutput("You raised your hand ✋");
+      } else {
+        // Lower hand
+        socketRef.current.emit("lowerHand", { roomId });
+        
+        // Update local state
+        setRaisedHands(prev => {
+          const updated = { ...prev };
+          delete updated[socketRef.current.id];
+          return updated;
+        });
+        
+        setOutput("You lowered your hand");
+      }
+      
+      setShowOutput(true);
+      setTimeout(() => setShowOutput(false), 3000);
+    }
+  }
 
   // Socket.IO connection and real-time collaboration
   useEffect(() => {
@@ -1114,6 +1156,42 @@ console.log("white");
       setOutput(`${userName} closed the whiteboard`)
       setShowOutput(true)
       setTimeout(() => setShowOutput(false), 3000)
+    })
+    
+    // Handle raise hand events
+    socketRef.current.on("userRaisedHand", ({ userId, userName, timestamp }) => {
+      console.log(`${userName} (${userId}) raised their hand`)
+      
+      // Update raised hands state
+      setRaisedHands(prev => ({
+        ...prev,
+        [userId]: timestamp
+      }));
+      
+      // Show notification
+      setOutput(`✋ ${userName} raised their hand`)
+      setShowOutput(true)
+      setTimeout(() => setShowOutput(false), 3000)
+      
+      // Play a subtle notification sound if possible
+      try {
+        const audio = new Audio('/notification.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(err => console.log('Could not play notification sound', err));
+      } catch (err) {
+        console.log('Error playing notification sound:', err);
+      }
+    })
+    
+    socketRef.current.on("userLoweredHand", ({ userId, userName }) => {
+      console.log(`${userName} (${userId}) lowered their hand`)
+      
+      // Update raised hands state
+      setRaisedHands(prev => {
+        const updated = { ...prev };
+        delete updated[userId];
+        return updated;
+      });
     })
 
     // Handle typing indicators
@@ -2242,7 +2320,7 @@ console.log("white");
                           </div>
                           
                           {/* Call Controls */}
-                          <div className="grid grid-cols-4 gap-3">
+                          <div className="grid grid-cols-3 gap-3 mb-2">
                             {/* Toggle Audio */}
                             <button
                               onClick={toggleAudio}
@@ -2349,6 +2427,38 @@ console.log("white");
                               </svg>
                               <span className="text-xs font-medium">
                                 {screenStream ? "Stop Share" : "Share Screen"}
+                              </span>
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            {/* Raise Hand */}
+                            <button
+                              onClick={toggleHandRaise}
+                              className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg font-medium transition-all duration-200 
+                              ${handRaised 
+                                ? "bg-yellow-500 text-white hover:bg-yellow-600" 
+                                : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+                              title={handRaised ? "Lower your hand" : "Raise your hand"}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="22"
+                                height="22"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="mb-1"
+                              >
+                                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+                                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path>
+                                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
+                                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
+                              </svg>
+                              <span className="text-xs font-medium">
+                                {handRaised ? "Lower Hand" : "Raise Hand"}
                               </span>
                             </button>
 
@@ -2458,6 +2568,135 @@ console.log("white");
                         <li>Share your screen to demonstrate code or show other applications</li>
                         <li>All participants in the room will be automatically connected to the call</li>
                       </ul>
+                    </div>
+                    
+                    {/* Participants List */}
+                    <div className="p-3 mt-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Participants</h3>
+                        <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
+                          {roomUsers.length} {roomUsers.length === 1 ? 'user' : 'users'}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {/* Current User */}
+                        <div className="flex items-center justify-between p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div className="relative w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-700 rounded-full flex items-center justify-center text-white font-medium">
+                              {(user?.name || userName || "You").charAt(0).toUpperCase()}
+                              {handRaised && (
+                                <div className="absolute -top-1 -right-1 bg-yellow-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                                  <span className="text-xs">✋</span>
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-gray-900 dark:text-white flex items-center gap-1">
+                                {user?.name || userName || "You"}
+                                <span className="text-xs text-orange-600 dark:text-orange-400">(You)</span>
+                                {handRaised && (
+                                  <span className="text-yellow-600 dark:text-yellow-400 ml-1">✋</span>
+                                )}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {localStream ? "In call" : "Not in call"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            {localStream && !isAudioOn && (
+                              <div className="w-5 h-5 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center" title="Microphone muted">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
+                                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                                </svg>
+                              </div>
+                            )}
+                            {localStream && !isVideoOn && (
+                              <div className="w-5 h-5 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center" title="Camera off">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
+                                  <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
+                                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                              </div>
+                            )}
+                            {screenStream && (
+                              <div className="w-5 h-5 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center" title="Sharing screen">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+                                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Remote Users */}
+                        {roomUsers.filter(user => user.id !== socketRef.current?.id).map(roomUser => {
+                          const isInCall = Object.keys(remoteStreams).includes(roomUser.id);
+                          const stream = remoteStreams[roomUser.id];
+                          const hasAudio = stream?.getAudioTracks().length > 0;
+                          const audioEnabled = hasAudio && stream?.getAudioTracks()[0].enabled;
+                          const hasVideo = stream?.getVideoTracks().length > 0;
+                          const videoEnabled = hasVideo && stream?.getVideoTracks()[0].enabled;
+                          const isScreenSharing = Object.keys(remoteScreenShares).includes(roomUser.id);
+                          
+                          return (
+                            <div key={roomUser.id} className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700/30 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <div className="relative w-8 h-8 bg-gradient-to-br from-gray-500 to-gray-700 rounded-full flex items-center justify-center text-white font-medium">
+                                  {roomUser.name.charAt(0).toUpperCase()}
+                                  {raisedHands[roomUser.id] && (
+                                    <div className="absolute -top-1 -right-1 bg-yellow-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                                      <span className="text-xs">✋</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-xs font-medium text-gray-900 dark:text-white flex items-center gap-1">
+                                    {roomUser.name}
+                                    {raisedHands[roomUser.id] && (
+                                      <span className="text-yellow-600 dark:text-yellow-400 ml-1">✋</span>
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {isInCall ? "In call" : "Not in call"}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                {isInCall && !audioEnabled && (
+                                  <div className="w-5 h-5 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center" title="Microphone muted">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
+                                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                                    </svg>
+                                  </div>
+                                )}
+                                {isInCall && !videoEnabled && (
+                                  <div className="w-5 h-5 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center" title="Camera off">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
+                                      <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
+                                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                                    </svg>
+                                  </div>
+                                )}
+                                {isScreenSharing && (
+                                  <div className="w-5 h-5 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center" title="Sharing screen">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+                                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                      <line x1="8" y1="21" x2="16" y2="21"></line>
+                                      <line x1="12" y1="17" x2="12" y2="21"></line>
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     
                     {/* Room Connection Status */}

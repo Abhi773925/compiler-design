@@ -351,7 +351,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               const currentFiles = fileTabsRef.current.getSavedFilesCount ? 
                 fileTabsRef.current.getSavedFilesCount() : 0;
               
-              // Check after refresh if there are new files
+              // Check after refresh if there are new filesss
               setTimeout(() => {
                 const newCount = fileTabsRef.current.getSavedFilesCount ? 
                   fileTabsRef.current.getSavedFilesCount() : 0;

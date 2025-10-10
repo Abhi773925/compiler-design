@@ -20,8 +20,8 @@ router.post('/token', async (req, res) => {
     }
     
     // Hardcoded GitHub OAuth credentials - production ready
-    const githubClientId = 'Iv1_IA_Iv0SHGByhx8OA8Ov23lik';
-    const githubClientSecret = '33f8826253cb41cdb16802a4eb5971f73144eb28';
+    const githubClientId = 'Ov23likZXqyctlogOjrD';
+    const githubClientSecret = '9e2e39b71f7da39220e3f8d78a6cc00517049cba';
     
     // Always using hardcoded values so this check is just for safety
     if (!githubClientId || !githubClientSecret) {

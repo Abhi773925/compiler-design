@@ -323,23 +323,23 @@ const Compiler = ({ roomId, userName }) => {
   
   // Function to open GitHub integration modal
   const openGitHubModal = () => {
-    setShowGitHubModal(true)
+    setGitHubLoadModalOpen(true)
   }
   
   // Function to close GitHub integration modal
   const closeGitHubModal = () => {
-    setShowGitHubModal(false)
+    setGitHubLoadModalOpen(false)
   }
   
   // Function to open GitHub save modal
   const openGitHubSaveModal = () => {
     if (!monacoRef.current) return
-    setShowGitHubSaveModal(true)
+    setGitHubSaveModalOpen(true)
   }
   
   // Function to close GitHub save modal
   const closeGitHubSaveModal = () => {
-    setShowGitHubSaveModal(false)
+    setGitHubSaveModalOpen(false)
   }
   
   // Handle loading a file from GitHub

@@ -11,11 +11,11 @@ const GITHUB_API_BASE = 'https://api.github.com';
  * @returns {Promise} Promise resolving to GitHub auth data
  */
 export const authenticateWithGithub = () => {
-  // GitHub OAuth client ID - replace with your own in production
-  const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || '1bf3ad4416259160390493ad8483bebc642d2f45';
+  // GitHub OAuth client ID - hardcoded for production
+  const clientId = '1bf3ad4416259160390493ad8483bebc642d2f45';
   
-  // Redirect URI - will need to be configured in GitHub OAuth app settings
-  const redirectUri = `${window.location.origin}/github-callback`;
+  // Redirect URI - hardcoded for production
+  const redirectUri = 'https://prep-mates.vercel.app/github-callback';
   
   // Scopes needed for repository operations
   const scope = 'repo';
@@ -51,7 +51,7 @@ export const handleGithubCallback = async (code, state) => {
   localStorage.removeItem('github_auth_state');
   
   // Exchange code for access token through backend
-  const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/github/token`, {
+  const response = await fetch('https://prep-mates-backend.vercel.app/api/github/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -9,6 +9,8 @@ import { useAuth } from "../../context/AuthContext"
 import { io } from "socket.io-client"
 import { Tldraw } from "tldraw"
 import "tldraw/tldraw.css"
+import GitHubIntegration from "../github/GitHubIntegration"
+import GitHubSaveModal from "../github/GitHubSaveModal"
 
 const Compiler = ({ roomId, userName }) => {
   const { theme: appTheme, toggleTheme } = useTheme()
@@ -31,6 +33,8 @@ const Compiler = ({ roomId, userName }) => {
   const [activeUsers, setActiveUsers] = useState({}) // {userId: {typing: bool, lastActivity: timestamp}}
   const [typingUsers, setTypingUsers] = useState(new Set()) // Set of userIds who are typing
   const [showFullscreenWhiteboard, setShowFullscreenWhiteboard] = useState(false) // Toggle fullscreen whiteboard
+  const [showGitHubModal, setShowGitHubModal] = useState(false) // Toggle GitHub integration modal
+  const [showGitHubSaveModal, setShowGitHubSaveModal] = useState(false) // Toggle GitHub save modal
   const [tldrawEditor, setTldrawEditor] = useState(null) // tldraw editor instance
   const tldrawUnsubRef = useRef(null)
   const whiteboardOpenedByOthers = useRef(true) // Track if whiteboard was opened by another user
@@ -313,6 +317,103 @@ const Compiler = ({ roomId, userName }) => {
       setShowOutput(true)
     } catch (error) {
       setOutput(`Error generating share link: ${error.message}`)
+      setShowOutput(true)
+    }
+  }
+  
+  // Function to open GitHub integration modal
+  const openGitHubModal = () => {
+    setShowGitHubModal(true)
+  }
+  
+  // Function to close GitHub integration modal
+  const closeGitHubModal = () => {
+    setShowGitHubModal(false)
+  }
+  
+  // Function to open GitHub save modal
+  const openGitHubSaveModal = () => {
+    if (!monacoRef.current) return
+    setShowGitHubSaveModal(true)
+  }
+  
+  // Function to close GitHub save modal
+  const closeGitHubSaveModal = () => {
+    setShowGitHubSaveModal(false)
+  }
+  
+  // Handle loading a file from GitHub
+  const handleLoadFromGitHub = (fileData) => {
+    if (!monacoRef.current) return
+    
+    try {
+      // Create a new file in the workspace with GitHub info
+      const fileId = `github-${Date.now()}`
+      const githubFile = {
+        name: fileData.name,
+        content: fileData.content,
+        path: fileData.path,
+        repo: fileData.repo,
+        sha: fileData.sha,
+        fromGitHub: true,
+      }
+      
+      // Add to files state
+      setFiles(prev => ({ ...prev, [fileId]: githubFile }))
+      
+      // Set as active file
+      setActiveFileId(fileId)
+      
+      // Update editor content
+      isRemoteChange.current = true
+      monacoRef.current.setValue(fileData.content)
+      setCode(fileData.content)
+      
+      // Update language based on file extension if possible
+      const extension = fileData.name.split('.').pop().toLowerCase()
+      const langMap = {
+        'js': 'javascript',
+        'py': 'python',
+        'java': 'java',
+        'cpp': 'cpp',
+        'c': 'c',
+        'cs': 'csharp',
+        'ts': 'typescript',
+        'go': 'go',
+        'rs': 'rust',
+        'php': 'php',
+        'rb': 'ruby',
+        'kt': 'kotlin',
+        'swift': 'swift',
+        'r': 'r',
+        'sql': 'sql',
+      }
+      
+      if (langMap[extension]) {
+        setLanguage(langMap[extension])
+      }
+      
+      // Notify user
+      setOutput(`Loaded ${fileData.name} from ${fileData.repo.name}`)
+      setShowOutput(true)
+      
+      // Emit to other users if in a room
+      if (socketRef.current && roomId) {
+        socketRef.current.emit("uploadFile", {
+          roomId,
+          fileId,
+          name: fileData.name,
+          content: fileData.content,
+          uploadedBy: socketRef.current.id,
+          uploaderName: user?.name || userName || "Anonymous",
+        })
+        
+        // Set as active file for everyone
+        socketRef.current.emit("setActiveFile", { roomId, fileId })
+      }
+    } catch (error) {
+      console.error('Error loading file from GitHub:', error)
+      setOutput(`Error loading from GitHub: ${error.message}`)
       setShowOutput(true)
     }
   }

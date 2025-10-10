@@ -21,6 +21,8 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   const [language, setLanguage] = useState("javascript")
   const [code, setCode] = useState("")
   const [theme, setTheme] = useState("vs-dark")
+  const [saveStatus, setSaveStatus] = useState("saved") // can be 'saving', 'saved', or 'error'
+  const autoSaveTimeoutRef = useRef(null)
   
   // Always use the authenticated user's name if available, otherwise use the prop
   const userName = user?.name || propUserName || (user?.email ? user.email.split('@')[0] : null)
@@ -252,11 +254,12 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     }
   };
   
-  // Save current file content to database
+  // Save current file content to database with status
   const saveCurrentFile = async () => {
     if (!monacoRef.current || !activeFileId || !files[activeFileId]) return;
     
     try {
+      setSaveStatus('saving');
       const currentContent = monacoRef.current.getValue();
       const currentFile = files[activeFileId];
       
@@ -286,11 +289,15 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             lastSaved: new Date().toISOString()
           }
         }));
+        setSaveStatus('saved');
       }
     } catch (error) {
       console.error('Error saving file:', error);
+      setSaveStatus('error');
       setOutput(`Error saving file: ${error.message}`);
       setShowOutput(true);
+      // Reset save status after error
+      setTimeout(() => setSaveStatus('saved'), 3000);
     }
   };
 
@@ -371,10 +378,27 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   const loaderAddedRef = React.useRef(false)
   const editorCreatedRef = React.useRef(false)
 
+  // Lock to prevent rapid language switches
+  const languageLockRef = useRef(false);
+  
+  // Update language with debounce and lock
+  const handleLanguageChange = (newLanguage) => {
+    if (languageLockRef.current) return;
+    
+    languageLockRef.current = true;
+    setLanguage(newLanguage);
+    languageRef.current = newLanguage;
+    
+    // Release lock after a short delay
+    setTimeout(() => {
+      languageLockRef.current = false;
+    }, 500);
+  };
+
   // Update refs when values change
   useEffect(() => {
-    languageRef.current = language
-  }, [language])
+    languageRef.current = language;
+  }, [language]);
 
   useEffect(() => {
     roomIdRef.current = roomId

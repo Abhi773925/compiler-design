@@ -1982,8 +1982,22 @@ const Compiler = ({ roomId, userName }) => {
     // Prevent infinite loop if changes are applied locally and broadcasted
     if (isApplyingRemoteRef.current) return
 
-    // Get current drawing data from tldraw
-    const snapshot = tldrawEditor.store.getSnapshot()
+    // Get current drawing data from tldraw with safe fallbacks
+    let snapshot = null
+    try {
+      const store = tldrawEditor.store
+      if (store && typeof store.getSnapshot === 'function') {
+        snapshot = store.getSnapshot()
+      } else if (store && typeof store.serialize === 'function') {
+        snapshot = store.serialize()
+      } else if (typeof tldrawEditor.getSnapshot === 'function') {
+        snapshot = tldrawEditor.getSnapshot()
+      }
+    } catch (e) {
+      console.warn('Failed to read whiteboard snapshot:', e)
+      return
+    }
+    if (!snapshot) return
 
     // Broadcast to other users
     socketRef.current.emit("whiteboardChange", {
@@ -1997,7 +2011,16 @@ const Compiler = ({ roomId, userName }) => {
     if (tldrawEditor && snapshot) {
       isApplyingRemoteRef.current = true
       try {
-        tldrawEditor.store.loadSnapshot(snapshot)
+        const store = tldrawEditor.store
+        if (store && typeof store.loadSnapshot === 'function') {
+          store.loadSnapshot(snapshot)
+        } else if (store && typeof store.deserialize === 'function') {
+          store.deserialize(snapshot)
+        } else if (typeof tldrawEditor.loadSnapshot === 'function') {
+          tldrawEditor.loadSnapshot(snapshot)
+        } else {
+          console.warn('No compatible method to apply whiteboard snapshot')
+        }
       } finally {
         isApplyingRemoteRef.current = false
       }
@@ -3514,26 +3537,27 @@ console.log("white");
   // Effect to set up whiteboard listener when editor is ready
   useEffect(() => {
     if (tldrawEditor && socketRef.current && roomId) {
-      const handleChange = () => {
-        handleWhiteboardChange()
-      }
+      const store = tldrawEditor.store
+      const handleChange = () => handleWhiteboardChange()
 
       // Light debounce for near-instant updates
       let changeTimeout
-      const unsubscribe = tldrawEditor.store.listen(() => {
-        clearTimeout(changeTimeout)
-        changeTimeout = setTimeout(handleChange, 60)
-      })
-      tldrawUnsubRef.current = unsubscribe
+      if (store && typeof store.listen === 'function') {
+        const unsubscribe = store.listen(() => {
+          clearTimeout(changeTimeout)
+          changeTimeout = setTimeout(handleChange, 60)
+        })
+        tldrawUnsubRef.current = unsubscribe
+      }
     }
 
     return () => {
       if (tldrawUnsubRef.current) {
-        tldrawUnsubRef.current()
+        try { tldrawUnsubRef.current() } catch {}
         tldrawUnsubRef.current = null
       }
     }
-  }, [tldrawEditor, socketRef.current, roomId])
+  }, [tldrawEditor, roomId])
 
   return (
     <div className="flex h-screen bg-white dark:bg-black text-gray-900 dark:text-white overflow-hidden relative z-10">

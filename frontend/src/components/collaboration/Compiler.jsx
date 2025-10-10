@@ -57,43 +57,8 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   // Shared files state
   const [activeFileId, setActiveFileId] = useState('main.js')
   const [files, setFiles] = useState({}) // {fileId: { name, content }}
-  const [savedFiles, setSavedFiles] = useState([]) // Saved files from database
-  const lastFileChangeRef = useRef(Date.now())
-  const fileChangeTimeoutRef = useRef(null)
-  
-  // Function to fetch saved files from database
-  const fetchSavedFiles = async () => {
-    if (user && user.id) {
-      try {
-        console.log('Fetching saved files for user:', user.name || user.id);
-        const files = await getUserFiles();
-        console.log('Loaded saved files:', files);
-        
-        if (Array.isArray(files)) {
-          setSavedFiles(files);
-          console.log('Fetched saved files:', files.length);
-          
-          // If this is a component that can show files, notify it of the update
-          if (fileTabsRef.current && typeof fileTabsRef.current.refreshFiles === 'function') {
-            console.log('Notifying FileTabs component of file update');
-            fileTabsRef.current.refreshFiles();
-          }
-        } else {
-          console.error('Unexpected response format from getUserFiles:', files);
-          setSavedFiles([]);
-        }
-      } catch (error) {
-        console.error('Error fetching saved files:', error);
-        // Show error in UI
-        setOutput(`Error loading saved files: ${error.message}`);
-        setShowOutput(true);
-        setTimeout(() => setShowOutput(false), 5000);
-      }
-    } else {
-      console.log('Not fetching saved files - user not logged in');
-      setSavedFiles([]); // Clear saved files if user is not logged in
-    }
-  };
+  // Keep track of when files were last saved
+  const lastSavedRef = useRef({});
   
   // Function to load a saved file from the database
   const loadSavedFile = async (fileData) => {
@@ -358,24 +323,18 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     }
   };
 
-  // Fetch saved files when user changes or when files are saved
+  // Auto-save status effect
   useEffect(() => {
     if (user && user.id) {
-      console.log('Compiler: Fetching saved files after user change');
-      fetchSavedFiles();
+      // Show initial message
+      setOutput('Auto-save enabled');
+      setShowOutput(true);
+      setTimeout(() => setShowOutput(false), 2000);
       
-      // Set a periodic refresh to keep saved files up-to-date
-      const refreshInterval = setInterval(() => {
-        if (user && user.id) {
-          console.log('Periodic refresh of saved files');
-          fetchSavedFiles();
-          
-          // Also update the FilesTab component if it's available
-          if (fileTabsRef.current) {
-            try {
-              const currentView = fileTabsRef.current.getCurrentView();
-              // Always refresh files in background, but only show notification in saved view
-              fileTabsRef.current.refreshFiles();
+      // Update FilesTab component if it's available
+      if (fileTabsRef.current) {
+        try {
+          fileTabsRef.current.refreshFiles();
               
               // If user is actively looking at saved files, show a brief notification when new files appear
               if (currentView === 'saved') {
@@ -423,9 +382,9 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
   // Auto-save effect when code changes
   useEffect(() => {
-    if (code && !isRemoteChange.current) {
-      const timer = setTimeout(saveCurrentFile, 2000); // Auto-save 2 seconds after last change
-      return () => clearTimeout(timer);
+    if (code && !isRemoteChange.current && activeFileId) {
+      // Save immediately when code changes
+      saveCurrentFile();
     }
   }, [code])
   

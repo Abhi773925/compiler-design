@@ -51,6 +51,8 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   const languageRef = useRef(language) // Add ref for language
   const roomIdRef = useRef(roomId) // Add ref for roomId
   const fileTabsRef = useRef(null) // Ref for FilesTab component
+  const localStream = useRef(null) // Add ref for localStream
+  const roomsWithActiveCalls = useRef(new Set()) // Add ref for tracking rooms with active calls
   // Shared files state
   const [activeFileId, setActiveFileId] = useState('main.js')
   const [files, setFiles] = useState({}) // {fileId: { name, content }}
@@ -1294,19 +1296,19 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             // Continue without screen track - at least try to establish connection
           }
         }
-      } else if (localStream) {
+      } else if (localStream.current) {
         // Add local tracks with more robust error handling
-        for (const track of localStream.getTracks()) {
+        for (const track of localStream.current.getTracks()) {
           try {
             console.log(`Adding ${track.kind} track to peer connection with ${userId}`);
-            pc.addTrack(track, localStream);
+            pc.addTrack(track, localStream.current);
           } catch (trackError) {
             console.error(`Error adding ${track.kind} track to connection with ${userId}:`, trackError);
             
             // Try alternative approach if standard method fails
             try {
               console.log(`Trying alternate method to add ${track.kind} track for ${userId}`);
-              pc.addTransceiver(track, { streams: [localStream] });
+              pc.addTransceiver(track, { streams: [localStream.current] });
               console.log(`Added ${track.kind} track via transceiver for ${userId}`);
             } catch (altError) {
               console.error(`Alternative track addition also failed for ${track.kind}:`, altError);
@@ -1956,12 +1958,12 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       // If this was the last connection and we still have local media,
       // check if we should stop local media
       const remainingConnections = Object.keys(peerConnections.current).length;
-      if (remainingConnections === 0 && localStream && window._autoStopVideoWhenAlone) {
+      if (remainingConnections === 0 && localStream.current && window._autoStopVideoWhenAlone) {
         console.log(`No more connections, considering stopping local video`);
         
         // Option: Auto-stop video when alone - controlled by a flag
         // setTimeout(() => {
-        //   if (Object.keys(peerConnections.current).length === 0 && localStream) {
+        //   if (Object.keys(peerConnections.current).length === 0 && localStream.current) {
         //     stopVideo();
         //     setOutput("Video call ended - no more participants");
         //     setShowOutput(true);
@@ -2166,7 +2168,7 @@ console.log("white");
         socketRef.current.emit("checkRoomCallStatus", { roomId });
         
         // Re-establish video connection if we were in a call
-        if (localStream && roomsWithActiveCalls.current.has(roomId)) {
+        if (localStream.current && roomsWithActiveCalls.current.has(roomId)) {
           console.log("Re-establishing video connection after reconnect");
           
           // Clean up any stale connections first
@@ -2250,7 +2252,7 @@ console.log("white");
       socketRef.current.emit("checkRoomCallStatus", { roomId });
       
       // Re-establish video connections if we were disconnected during a call
-      if (window._needsReconnect && localStream) {
+      if (window._needsReconnect && localStream.current) {
         console.log("Re-establishing call connections after reconnect");
         
         // Clean up any stale connections first
@@ -2430,7 +2432,7 @@ console.log("white");
         roomsWithActiveCalls.current.add(roomId)
         
         // If we're not already in the call but there's an active call, notify user
-        if (!localStream && participantCount > 0) {
+        if (!localStream.current && participantCount > 0) {
           setOutput(`There's an active video call in this room with ${participantCount} participant${participantCount !== 1 ? 's' : ''}. Would you like to join?`)
           setShowOutput(true)
           
@@ -2599,7 +2601,7 @@ console.log("white");
 
       if (userId !== socketRef.current.id) {
         // If we don't have local stream, show incoming call notification
-        if (!localStream) {
+        if (!localStream.current) {
           // Check if there's already an incoming call notification
           // to avoid showing multiple notifications for the same caller
           if (incomingCall && incomingCall.from === userId) {
@@ -3081,7 +3083,7 @@ console.log("white");
           
           // Try to create a new connection after a brief delay
           setTimeout(() => {
-            if (localStream) {
+            if (localStream.current) {
               createPeerConnection(from, true)
                 .then(() => console.log(`Recreated peer connection with ${from}`))
                 .catch(e => console.error(`Failed to recreate connection with ${from}:`, e));

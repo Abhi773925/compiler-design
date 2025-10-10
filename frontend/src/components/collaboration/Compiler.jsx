@@ -3812,28 +3812,7 @@ console.log("white");
             </svg>
           </button>
 
-          {/* Video Tab */}
-          <button
-            onClick={() => setActiveTab(activeTab === "video" ? null : "video")}
-            className={`p-2.5 md:p-3 ${activeTab === "video" ? "bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400" : "hover:bg-orange-100 dark:hover:bg-orange-900/20 text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400"} rounded-lg mb-3 md:mb-4 transition-all duration-200 hover:scale-105`}
-            title="Video Call"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="md:w-5 md:h-5"
-            >
-              <polygon points="23 7 16 12 23 17 23 7"></polygon>
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-            </svg>
-          </button>
+          
 
           {/* Files Tab */}
           <button

@@ -6,22 +6,27 @@
 // Get API base URL based on environment
 const getApiBaseUrl = () => {
   return process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:5000' 
+    ? 'https://compiler-design.onrender.com' 
     : 'https://compiler-design.onrender.com';
 };
 
 /**
  * Get all saved files for the authenticated user
+ * @param {boolean} withContent - Whether to include file content (default: true)
  * @returns {Promise} Promise resolving to array of files
  */
-export const getUserFiles = async () => {
+export const getUserFiles = async (withContent = true) => {
   const token = localStorage.getItem('token');
   
   if (!token) {
     throw new Error('Not authenticated');
   }
   
-  const response = await fetch(`${getApiBaseUrl()}/api/files`, {
+  const url = withContent 
+    ? `${getApiBaseUrl()}/api/files?withContent=true`
+    : `${getApiBaseUrl()}/api/files`;
+  
+  const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

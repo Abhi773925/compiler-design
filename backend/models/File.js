@@ -17,16 +17,12 @@ const fileSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ["github", "editor"],
+      enum: ["github", "editor", "local-upload", "custom"],
       default: "editor",
     },
     metadata: {
-      repoName: String,
-      repoOwner: String,
-      path: String,
-      sha: String,
-      language: String,
-      size: Number,
+      type: mongoose.Schema.Types.Mixed, // Use Mixed type to accept any structure
+      default: {}
     },
     lastAccessed: {
       type: Date,
@@ -35,6 +31,7 @@ const fileSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    strict: false, // Allow additional fields
   }
 );
 
@@ -49,5 +46,10 @@ fileSchema.methods.updateLastAccessed = async function () {
   this.lastAccessed = new Date();
   return this.save();
 };
+
+// Clear any existing model to force reload
+if (mongoose.models.File) {
+  delete mongoose.models.File;
+}
 
 module.exports = mongoose.model("File", fileSchema);

@@ -187,44 +187,78 @@ const FilesTab = forwardRef(({
       </div>
       
       {Object.keys(files).length > 0 ? (
-        Object.entries(files).map(([fileId, file]) => (
-          <div
-            key={fileId}
-            onClick={() => onFileSelect(fileId)}
-            className={`px-3 py-2 flex items-center justify-between rounded-md cursor-pointer group ${
-              activeFileId === fileId
-                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200'
-            }`}
-          >
-            <div className="flex items-center overflow-hidden">
-              {/* File icon based on source */}
-              {file.fromGitHub ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
-              ) : file.fromCache ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              )}
-              
-              {/* File name with truncation */}
-              <span className="truncate mr-1">
-                {file.name || 'untitled'}
-              </span>
+        Object.entries(files).map(([fileId, file]) => {
+          // Get file extension and determine icon
+          const ext = file.name ? file.name.split('.').pop().toLowerCase() : '';
+          const getFileIcon = () => {
+            switch (ext) {
+              case 'js':
+                return (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 mr-2 text-yellow-400">
+                    <path fill="currentColor" d="M3 3h18v18H3V3m4.73 15.04c.4.85 1.19 1.55 2.54 1.55 1.5 0 2.53-.8 2.53-2.55v-5.78h-1.7V17c0 .86-.35 1.08-.9 1.08-.58 0-.82-.4-1.09-.87l-1.38.83m5.98-.18c.5.98 1.51 1.73 3.09 1.73 1.6 0 2.8-.83 2.8-2.36 0-1.41-.81-2.04-2.25-2.66l-.42-.18c-.73-.31-1.04-.52-1.04-1.02 0-.41.31-.73.81-.73.48 0 .8.21 1.09.73l1.31-.87c-.55-.96-1.33-1.33-2.4-1.33-1.51 0-2.48.96-2.48 2.23 0 1.38.81 2.03 2.03 2.55l.42.18c.78.34 1.24.55 1.24 1.13 0 .48-.45.83-1.15.83-.83 0-1.31-.43-1.67-1.03l-1.38.80z"/>
+                  </svg>
+                );
+              case 'jsx':
+                return (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 mr-2 text-blue-400">
+                    <path fill="currentColor" d="M12 10.11c1.03 0 1.87.84 1.87 1.89 0 1-.84 1.85-1.87 1.85s-1.87-.85-1.87-1.85c0-1.05.84-1.89 1.87-1.89M7.37 20c.63.38 2.01-.2 3.6-1.7-.52-.59-1.03-1.23-1.51-1.9-.82-.08-1.63-.2-2.4-.36-.51 2.14-.32 3.61.31 3.96m.71-5.74l-.29-.51c-.11.29-.22.58-.29.86.27.06.57.11.88.16l-.3-.51m6.54-.76l.81-1.5-.81-1.5c-.3-.53-.62-1-.91-1.47C13.17 9 12.6 9 12 9c-.6 0-1.17 0-1.71.03-.29.47-.61.94-.91 1.47L8.57 12l.81 1.5c.3.53.62 1 .91 1.47.54.03 1.11.03 1.71.03.6 0 1.17 0 1.71-.03.29-.47.61-.94.91-1.47M12 6.78c-.19.22-.39.45-.59.72h1.18c-.2-.27-.4-.5-.59-.72m0 10.44c.19-.22.39-.45.59-.72h-1.18c.2.27.4.5.59.72M16.62 4c-.62-.38-2 .2-3.59 1.7.52.59 1.03 1.23 1.51 1.9.82.08 1.63.2 2.4.36.51-2.14.32-3.61-.32-3.96m-.7 5.74l.29.51c.11-.29.22-.58.29-.86-.27-.06-.57-.11-.88-.16l.3.51m1.45-7.05c1.47.84 1.63 3.05 1.01 5.63 2.54.75 4.37 1.99 4.37 3.68s-1.83 2.93-4.37 3.68c.62 2.58.46 4.79-1.01 5.63-1.46.84-3.45-.12-5.37-1.95-1.92 1.83-3.91 2.79-5.38 1.95-1.46-.84-1.62-3.05-1-5.63-2.54-.75-4.37-1.99-4.37-3.68s1.83-2.93 4.37-3.68c-.62-2.58-.46-4.79 1-5.63 1.47-.84 3.46.12 5.38 1.95 1.92-1.83 3.91-2.79 5.37-1.95M17.08 12c.34.75.64 1.5.89 2.26 2.1-.63 3.28-1.53 3.28-2.26s-1.18-1.63-3.28-2.26c-.25.76-.55 1.51-.89 2.26M6.92 12c-.34-.75-.64-1.5-.89-2.26-2.1.63-3.28 1.53-3.28 2.26s1.18 1.63 3.28 2.26c.25-.76.55-1.51.89-2.26m9 2.26l-.3.51c.31-.05.61-.1.88-.16-.07-.28-.18-.57-.29-.86l-.29.51m-2.89 4.04c1.59 1.5 2.97 2.08 3.59 1.7.64-.35.83-1.82.32-3.96-.77.16-1.58.28-2.4.36-.48.67-.99 1.31-1.51 1.9M8.02 2.5c.93-.16 2.03.29 3.2 1.2 1.17-.91 2.27-1.36 3.2-1.2.93.16 1.61.85 1.61.85s-.79.48-1.73 1.28c-.79.65-1.67 1.45-2.53 2.28l-1.5-.84-.9.68c-.26.17-.51.35-.77.53-.1.07-.21.15-.31.23-.11.09-.22.17-.33.26h4.2l.31.93.38 1.08.33.94c-.02.02-.03.04-.05.07l-.73 1.34-.83 1.48c.16 0 .32.01.48.01L9.69 16h4.62l.14 1.02c-.17 0-.33.01-.48.01l-.84-1.48c-.24-.43-.47-.86-.69-1.28L11.95 15h-4.2c.11.09.22.17.33.26.1.08.21.16.31.23.26.18.51.36.77.53l.9.68 1.5-.84c.86.83 1.74 1.63 2.53 2.28.94.8 1.73 1.28 1.73 1.28s-.68.69-1.61.85c-.93.16-2.03-.29-3.2-1.2-1.17.91-2.27 1.36-3.2 1.2-.93-.16-1.61-.85-1.61-.85s.79-.48 1.73-1.28c.79-.65 1.67-1.45 2.53-2.28l1.5.84.9-.68c.26-.17.51-.35.77-.53.1-.07.21-.15.31-.23.11-.09.22-.17.33-.26h-4.2l-.31-.93-.38-1.08L8.27 12c.02-.02.03-.04.05-.07l.73-1.34.84-1.48c-.17 0-.32-.01-.48-.01L12.31 8H7.69l-.14-1.02c.16 0 .32-.01.48-.01l.84 1.48c.24.43.47.86.69 1.28l.39.74h4.2c-.11-.09-.22-.17-.33-.26-.1-.08-.21-.16-.31-.23-.26-.18-.51-.36-.77-.53l-.9-.68-1.5.84c-.86-.83-1.74-1.63-2.53-2.28-.94-.8-1.73-1.28-1.73-1.28s.68-.69 1.61-.85z"/>
+                  </svg>
+                );
+              case 'ts':
+                return (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 mr-2 text-blue-500">
+                    <path fill="currentColor" d="M3 3h18v18H3V3m4.73 15.04c.4.85 1.19 1.55 2.54 1.55 1.5 0 2.53-.8 2.53-2.55v-5.78h-1.7V17c0 .86-.35 1.08-.9 1.08-.58 0-.82-.4-1.09-.87l-1.38.83m7.98-.18c.72.72 1.67 1.14 2.8 1.14 2.35 0 3.74-1.56 3.74-4v-.1c0-2.36-1.49-4-3.74-4-1.15 0-2.1.44-2.8 1.14V8.99h-1.71v11.62h1.71v-.75zm2.55-.15c-1.44 0-2.3-1.06-2.3-2.81v-.1c0-1.75.86-2.81 2.3-2.81s2.32 1.06 2.32 2.81v.1c0 1.75-.88 2.81-2.32 2.81z"/>
+                  </svg>
+                );
+              case 'py':
+                return (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 mr-2 text-blue-500">
+                    <path fill="currentColor" d="M19.14 7.5A2.86 2.86 0 0 1 22 10.36v3.78A2.86 2.86 0 0 1 19.14 17H12c0 .39.32.71.71.71H17v1.79c0 .66-.54 1.2-1.2 1.2H8.2c-.66 0-1.2-.54-1.2-1.2v-3.78A2.86 2.86 0 0 1 9.86 13H17c0-.39-.32-.71-.71-.71H12V9.5A2.86 2.86 0 0 1 14.86 7h3.78c.26 0 .5.21.5.5m-8.28 7.43c-.28 0-.5.22-.5.5v1.79c0 .28.22.5.5.5h1.79c.28 0 .5-.22.5-.5v-1.79c0-.28-.22-.5-.5-.5h-1.79zm7-5.86c-.28 0-.5.22-.5.5v1.79c0 .28.22.5.5.5h1.79c.28 0 .5-.22.5-.5V9.57c0-.28-.22-.5-.5-.5h-1.79z"/>
+                  </svg>
+                );
+              case 'cpp':
+              case 'c':
+                return (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 mr-2 text-blue-600">
+                    <path fill="currentColor" d="M10.5 15.97L10.91 18.41C10.65 18.55 10.23 18.68 9.67 18.8C9.1 18.93 8.43 19 7.66 19C5.45 18.96 3.79 18.3 2.68 17.04C1.56 15.77 1 14.16 1 12.21C1.05 9.9 1.72 8.13 3 6.89C4.32 5.64 5.96 5 7.94 5C8.69 5 9.34 5.07 9.88 5.19C10.42 5.31 10.82 5.44 11.08 5.59L10.5 8.08L9.44 7.74C9.04 7.64 8.58 7.59 8.05 7.59C7.34 7.59 6.79 7.69 6.39 7.89C6 8.08 5.67 8.36 5.42 8.72C5.17 9.08 4.99 9.5 4.89 9.97C4.79 10.44 4.74 10.95 4.74 11.5C4.74 12.8 5.1 13.77 5.81 14.41C6.52 15.05 7.52 15.37 8.82 15.37L9.44 15.33C9.9 15.25 10.31 15.13 10.67 14.96L10.5 15.97M9 11H11V9H13V11H15V13H13V15H11V13H9V11M15.5 15.97L15.91 18.41C15.65 18.55 15.23 18.68 14.67 18.8C14.1 18.93 13.43 19 12.66 19C10.45 18.96 8.79 18.3 7.68 17.04C6.56 15.77 6 14.16 6 12.21C6.05 9.9 6.72 8.13 8 6.89C9.32 5.64 10.96 5 12.94 5C13.69 5 14.34 5.07 14.88 5.19C15.42 5.31 15.82 5.44 16.08 5.59L15.5 8.08L14.44 7.74C14.04 7.64 13.58 7.59 13.05 7.59C12.34 7.59 11.79 7.69 11.39 7.89C11 8.08 10.67 8.36 10.42 8.72C10.17 9.08 9.99 9.5 9.89 9.97C9.79 10.44 9.74 10.95 9.74 11.5C9.74 12.8 10.1 13.77 10.81 14.41C11.52 15.05 12.52 15.37 13.82 15.37L14.44 15.33C14.9 15.25 15.31 15.13 15.67 14.96L15.5 15.97M14 11H16V9H18V11H20V13H18V15H16V13H14V11Z" />
+                  </svg>
+                );
+              default:
+                return (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                );
+            }
+          };
+
+          return (
+            <div
+              key={fileId}
+              onClick={() => onFileSelect(fileId)}
+              className={`group flex items-center px-3 py-1 cursor-pointer select-none ${
+                activeFileId === fileId
+                  ? 'bg-[#094771] text-white'
+                  : 'hover:bg-[#2a2d2e] text-gray-300'
+              }`}
+            >
+              <div className="flex items-center overflow-hidden">
+                {/* File icon */}
+                {getFileIcon()}
+                
+                {/* File name with optional status dot */}
+                <div className="flex items-center">
+                  <span className="truncate">
+                    {file.name || 'untitled'}
+                  </span>
+                  {file.unsaved && (
+                    <span className="ml-1 text-white text-opacity-60">●</span>
+                  )}
+                </div>
+              </div>
             </div>
-            
-            {/* Active indicator */}
-            {activeFileId === fileId && (
-              <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-            )}
-          </div>
-        ))
+          );
+        })
       ) : (
         <div className="text-center py-6">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -603,37 +637,11 @@ const FilesTab = forwardRef(({
       {/* Create File Modal */}
       {renderCreateFileModal()}
       
-      {/* Tab navigation */}
-      <div className="flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden mb-2">
-        <button
-          onClick={() => setView('session')}
-          className={`flex-1 py-2 text-sm ${
-            view === 'session'
-              ? 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
-              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-          }`}
-        >
-          Session ({getFileCount()})
-        </button>
-        <button
-          onClick={() => {
-            setView('saved');
-            if (user) loadSavedFiles();
-          }}
-          className={`flex-1 py-2 text-sm ${
-            view === 'saved'
-              ? 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
-              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-          } flex items-center justify-center`}
-          disabled={!user}
-        >
-          <span>Saved Files</span>
-          {savedFiles.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-200 dark:bg-orange-700 text-orange-800 dark:text-orange-200 rounded-full">
-              {savedFiles.length}
-            </span>
-          )}
-        </button>
+      {/* Header */}
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Current Files ({getFileCount()})
+        </h3>
       </div>
       
       {/* Add file button */}

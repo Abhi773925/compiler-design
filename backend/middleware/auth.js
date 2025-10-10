@@ -48,6 +48,7 @@ const auth = async (req, res, next) => {
       tokenExpiresAt: decoded.exp,
     };
 
+    console.log("✅ Auth successful for user:", req.user.userId);
     next();
   } catch (error) {
     console.error("Auth middleware error:", error);

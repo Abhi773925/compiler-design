@@ -58,7 +58,7 @@ export const handleGithubCallback = async (code, state) => {
   
   // Determine API URL based on environment
   const apiBaseUrl = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:5000'
+    ? 'https://compiler-design.onrender.com'
     : 'https://compiler-design.onrender.com';
     
   console.log(`Using API base URL: ${apiBaseUrl}`);

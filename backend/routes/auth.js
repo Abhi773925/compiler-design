@@ -113,9 +113,20 @@ router.get("/me", auth, async (req, res) => {
       });
     }
 
+    console.log("✅ /me route - returning user:", { id: user._id, email: user.email });
+
     res.status(200).json({
       success: true,
-      user,
+      user: {
+        id: user._id,
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        role: user.role,
+        preferences: user.preferences,
+        projects: user.projects,
+      },
     });
   } catch (error) {
     console.error("Get user error:", error);

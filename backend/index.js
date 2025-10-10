@@ -38,17 +38,16 @@ const PORT = process.env.PORT || 5000;
 const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/prepmate";
 
-// Rate limiting
+// Rate limiting - More generous for development
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 1000, // Increased from 100 to 1000 requests per windowMs
   message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// Middleware
-app.use(helmet());
-app.use(limiter);
-app.use(morgan("combined"));
+// Middleware - CORS must come BEFORE rate limiting
 app.use(
   cors({
     origin: [
@@ -60,8 +59,15 @@ app.use(
       "http://localhost:5177",
     ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+app.use(limiter);
+app.use(morgan("combined"));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -910,8 +916,21 @@ io.on("connection", (socket) => {
 // Connect to MongoDB
 mongoose
   .connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log("Connected to MongoDB");
+
+    // Force drop files collection to ensure clean schema
+    try {
+      const collections = await mongoose.connection.db.listCollections({ name: 'files' }).toArray();
+      if (collections.length > 0) {
+        await mongoose.connection.db.dropCollection('files');
+        console.log("✅ Dropped old files collection - fresh schema will be created");
+      } else {
+        console.log("ℹ️ Files collection doesn't exist yet - will be created on first save");
+      }
+    } catch (error) {
+      console.error("⚠️ Error checking/dropping files collection:", error.message);
+    }
 
     // Start cleanup job for expired sessions (runs daily at midnight)
     cron.schedule("0 0 * * *", async () => {

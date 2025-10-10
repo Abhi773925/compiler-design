@@ -12,10 +12,10 @@ const GITHUB_API_BASE = 'https://api.github.com';
  */
 export const authenticateWithGithub = () => {
   // GitHub OAuth client ID - hardcoded for production
-  const clientId = 'Ov23likZXqyctlogOjrD';
+  const clientId = 'Iv0SHGByhx8OA8Ov23likZXqyctlogOjrD';
   
   // Redirect URI - must match exactly what's configured in GitHub OAuth app settings
-  const redirectUri = 'https://prep-mates.vercel.app/github-callback';
+  const redirectUri = `${window.location.origin}/github-callback`;
   
   // Scopes needed for repository operations
   const scope = 'repo';
@@ -40,40 +40,63 @@ export const authenticateWithGithub = () => {
  * @returns {Promise} Promise resolving to the access token
  */
 export const handleGithubCallback = async (code, state) => {
+  console.log('Processing GitHub callback...');
+  
   const savedState = localStorage.getItem('github_auth_state');
   
   // Verify state to prevent CSRF attacks
   if (!savedState || state !== savedState) {
+    console.error('State verification failed', { 
+      receivedState: state, 
+      savedState: savedState 
+    });
     throw new Error('Invalid state parameter. Authentication attempt may have been compromised.');
   }
   
   // Clear the stored state
   localStorage.removeItem('github_auth_state');
   
-  // Exchange code for access token through backend (credentials now hardcoded on server)
-  const response = await fetch('https://compiler-design.onrender.com/api/github/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ code }),
-  });
+  // Determine API URL based on environment
+  const apiBaseUrl = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:5000'
+    : 'https://compiler-design.onrender.com';
+    
+  console.log(`Using API base URL: ${apiBaseUrl}`);
   
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.message || 'Failed to authenticate with GitHub');
+  try {
+    // Exchange code for access token through backend (credentials now hardcoded on server)
+    console.log('Exchanging code for token...');
+    const response = await fetch(`${apiBaseUrl}/api/github/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code }),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('GitHub token exchange failed:', data);
+      throw new Error(data.message || data.error || 'Failed to authenticate with GitHub');
+    }
+    
+    console.log('Token exchange successful');
+    
+    // Store token in localStorage
+    localStorage.setItem('github_access_token', data.access_token);
+    
+    // Also store user info if returned
+    if (data.user) {
+      localStorage.setItem('github_user', JSON.stringify(data.user));
+      console.log(`Authenticated as GitHub user: ${data.user.login}`);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('GitHub callback error:', error);
+    throw error;
   }
-  
-  // Store token in localStorage
-  localStorage.setItem('github_access_token', data.access_token);
-  
-  // Also store user info if returned
-  if (data.user) {
-    localStorage.setItem('github_user', JSON.stringify(data.user));
-  }
-  
-  return data;
 };
 
 /**
@@ -147,31 +170,52 @@ export const getFileContent = async (owner, repo, path) => {
     throw new Error('Not authenticated with GitHub');
   }
   
-  const response = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${path}`, {
-    headers: {
-      'Authorization': `token ${token}`,
-      'Accept': 'application/vnd.github.v3+json'
+  try {
+    console.log(`Fetching file content for ${owner}/${repo}/${path}`);
+    
+    const response = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${path}`, {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('GitHub API error:', data);
+      throw new Error(data.message || 'Failed to fetch file content');
     }
-  });
-  
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.message || 'Failed to fetch file content');
+    
+    // GitHub API returns content as base64 encoded
+    if (data.encoding === 'base64' && data.content) {
+      try {
+        // Remove whitespace and line breaks from base64 string
+        const cleanContent = data.content.replace(/\s/g, '');
+        
+        return {
+          content: atob(cleanContent),
+          sha: data.sha,
+          name: data.name,
+          path: data.path,
+          size: data.size,
+        };
+      } catch (decodeError) {
+        console.error('Error decoding base64 content:', decodeError);
+        throw new Error(`Failed to decode file content: ${decodeError.message}`);
+      }
+    }
+    
+    // Handle binary or large files that GitHub doesn't provide direct content for
+    if (data.encoding === null || !data.content) {
+      throw new Error(`File is too large or is binary (${data.size} bytes). Try downloading it directly.`);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error(`Error fetching file ${path} from ${owner}/${repo}:`, error);
+    throw error;
   }
-  
-  // GitHub API returns content as base64 encoded
-  if (data.encoding === 'base64' && data.content) {
-    return {
-      content: atob(data.content.replace(/\\n/g, '')),
-      sha: data.sha,
-      name: data.name,
-      path: data.path,
-      size: data.size,
-    };
-  }
-  
-  return data;
 };
 
 /**

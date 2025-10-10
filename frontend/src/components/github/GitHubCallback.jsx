@@ -26,11 +26,23 @@ const GitHubCallback = () => {
           return;
         }
         
+        // Check if GitHub returned an error
+        const errorParam = queryParams.get('error');
+        const errorDescription = queryParams.get('error_description');
+        
+        if (errorParam) {
+          setError(`GitHub error: ${errorDescription || errorParam}`);
+          setStatus('Failed');
+          return;
+        }
+        
         setStatus('Authenticating with GitHub...');
+        console.log('Processing GitHub callback with code:', code.substring(0, 5) + '...');
         
         // Process OAuth callback
         const result = await handleGithubCallback(code, state);
         
+        console.log('GitHub authentication successful!');
         setStatus('Successfully authenticated with GitHub!');
         
         // Redirect back to compiler after short delay
@@ -42,7 +54,10 @@ const GitHubCallback = () => {
         }, 1500);
       } catch (error) {
         console.error('GitHub callback error:', error);
-        setError(error.message || 'Failed to authenticate with GitHub');
+        // Provide more detailed error message
+        setError(
+          `Failed to authenticate with GitHub: ${error.message || 'Unknown error'}. Please try again.`
+        );
         setStatus('Failed');
       }
     };

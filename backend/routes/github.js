@@ -10,6 +10,8 @@ router.post('/token', async (req, res) => {
   try {
     const { code, clientId, clientSecret } = req.body;
     
+    console.log('GitHub token request received, code length:', code ? code.length : 0);
+    
     if (!code) {
       return res.status(400).json({ 
         success: false, 
@@ -18,62 +20,85 @@ router.post('/token', async (req, res) => {
     }
     
     // Hardcoded GitHub OAuth credentials - production ready
-    const githubClientId = 'Ov23likZXqyctlogOjrD';
+    const githubClientId = 'Iv0SHGByhx8OA8Ov23likZXqyctlogOjrD';
     const githubClientSecret = '33f8826253cb41cdb16802a4eb5971f73144eb28';
     
     // Always using hardcoded values so this check is just for safety
     if (!githubClientId || !githubClientSecret) {
+      console.error('Missing GitHub OAuth credentials');
       return res.status(500).json({ 
         success: false, 
         message: 'GitHub OAuth configuration is missing on the server' 
       });
     }
     
-    // Exchange code for access token with GitHub
-    const tokenResponse = await axios.post(
-      'https://github.com/login/oauth/access_token',
-      {
-        client_id: githubClientId,
-        client_secret: githubClientSecret,
-        code: code
-      },
-      {
-        headers: {
-          Accept: 'application/json'
-        }
-      }
-    );
+    console.log(`Using GitHub client ID: ${githubClientId.substring(0, 6)}...`);
     
-    // If token exchange fails
-    if (!tokenResponse.data.access_token) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Failed to exchange code for access token',
-        error: tokenResponse.data.error_description || tokenResponse.data.error
+    try {
+      // Exchange code for access token with GitHub
+      console.log('Sending token exchange request to GitHub...');
+      const tokenResponse = await axios.post(
+        'https://github.com/login/oauth/access_token',
+        {
+          client_id: githubClientId,
+          client_secret: githubClientSecret,
+          code: code
+        },
+        {
+          headers: {
+            Accept: 'application/json'
+          }
+        }
+      );
+      
+      console.log('Token response received:', Object.keys(tokenResponse.data));
+      
+      // If token exchange fails
+      if (!tokenResponse.data.access_token) {
+        console.error('GitHub token exchange failed:', tokenResponse.data);
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Failed to exchange code for access token',
+          error: tokenResponse.data.error_description || tokenResponse.data.error
+        });
+      }
+      
+      // Get user information using the access token
+      console.log('Fetching GitHub user info...');
+      const userResponse = await axios.get('https://api.github.com/user', {
+        headers: {
+          Authorization: `token ${tokenResponse.data.access_token}`
+        }
+      });
+      
+      console.log('GitHub user info received:', userResponse.data.login);
+      
+      // Return the access token and user information
+      return res.json({
+        success: true,
+        access_token: tokenResponse.data.access_token,
+        token_type: tokenResponse.data.token_type,
+        scope: tokenResponse.data.scope,
+        user: {
+          id: userResponse.data.id,
+          login: userResponse.data.login,
+          name: userResponse.data.name,
+          avatar_url: userResponse.data.avatar_url,
+          html_url: userResponse.data.html_url
+        }
+      });
+    } catch (apiError) {
+      console.error('GitHub API error during token exchange:', apiError.response?.data || apiError.message);
+      
+      // Return detailed error information
+      return res.status(apiError.response?.status || 500).json({
+        success: false,
+        message: 'GitHub API error during token exchange',
+        error: apiError.response?.data?.error_description || 
+               apiError.response?.data?.message || 
+               apiError.message
       });
     }
-    
-    // Get user information using the access token
-    const userResponse = await axios.get('https://api.github.com/user', {
-      headers: {
-        Authorization: `token ${tokenResponse.data.access_token}`
-      }
-    });
-    
-    // Return the access token and user information
-    return res.json({
-      success: true,
-      access_token: tokenResponse.data.access_token,
-      token_type: tokenResponse.data.token_type,
-      scope: tokenResponse.data.scope,
-      user: {
-        id: userResponse.data.id,
-        login: userResponse.data.login,
-        name: userResponse.data.name,
-        avatar_url: userResponse.data.avatar_url,
-        html_url: userResponse.data.html_url
-      }
-    });
     
   } catch (error) {
     console.error('GitHub OAuth error:', error);
@@ -81,7 +106,8 @@ router.post('/token', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to authenticate with GitHub',
-      error: error.response?.data?.error_description || error.message
+      error: error.response?.data?.error_description || error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });

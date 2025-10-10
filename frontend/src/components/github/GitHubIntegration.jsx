@@ -145,11 +145,26 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
       setLoading(true);
       setError(null);
       
+      // Check file size first
+      if (item.size > 1000000) { // 1MB limit
+        setError(`File is too large (${(item.size/1024/1024).toFixed(2)}MB). Maximum size is 1MB.`);
+        setLoading(false);
+        return;
+      }
+
+      console.log(`Loading file: ${item.path} from ${selectedRepo.name}`);
+      
       const fileData = await getFileContent(
         selectedRepo.owner.login,
         selectedRepo.name,
         item.path
       );
+      
+      if (!fileData || !fileData.content) {
+        throw new Error('No content received from GitHub API');
+      }
+      
+      console.log(`File loaded successfully: ${item.name}, content length: ${fileData.content.length} chars`);
       
       // Pass file content and metadata to parent component
       onSelectFile({
@@ -169,7 +184,13 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
       onClose();
     } catch (err) {
       console.error('Error loading file:', err);
-      setError('Failed to load file. Please try again.');
+      setError(`Failed to load file: ${err.message || 'Unknown error'}`);
+      
+      // If authentication error, prompt to login again
+      if (err.message?.includes('authenticated')) {
+        setIsAuthenticated(false);
+        setError('Your GitHub session has expired. Please log in again.');
+      }
     } finally {
       setLoading(false);
     }

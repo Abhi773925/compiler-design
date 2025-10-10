@@ -35,21 +35,44 @@ router.post('/token', async (req, res) => {
     console.log(`Using GitHub client ID: ${githubClientId.substring(0, 6)}...`);
     
     try {
-      // Exchange code for access token with GitHub
-      console.log('Sending token exchange request to GitHub...');
-      const tokenResponse = await axios.post(
-        'https://github.com/login/oauth/access_token',
-        {
-          client_id: githubClientId,
-          client_secret: githubClientSecret,
-          code: code
-        },
-        {
-          headers: {
-            Accept: 'application/json'
+      // Add retry functionality for token exchange
+      let retries = 0;
+      const maxRetries = 3;
+      let tokenResponse;
+      
+      while (retries < maxRetries) {
+        try {
+          // Exchange code for access token with GitHub
+          console.log(`Sending token exchange request to GitHub (attempt ${retries + 1})...`);
+          tokenResponse = await axios.post(
+            'https://github.com/login/oauth/access_token',
+            {
+              client_id: githubClientId,
+              client_secret: githubClientSecret,
+              code: code
+            },
+            {
+              headers: {
+                Accept: 'application/json'
+              },
+              timeout: 10000 // 10 second timeout
+            }
+          );
+          
+          // If we got here, the request succeeded
+          break;
+        } catch (retryError) {
+          retries++;
+          if (retries >= maxRetries) {
+            throw retryError; // Re-throw the error if we've exhausted retries
           }
+          
+          console.log(`Token exchange failed, retrying (${retries}/${maxRetries})...`);
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
         }
-      );
+      }
       
       console.log('Token response received:', Object.keys(tokenResponse.data));
       

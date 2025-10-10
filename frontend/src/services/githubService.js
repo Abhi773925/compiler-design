@@ -193,18 +193,99 @@ export const getFileContent = async (owner, repo, path) => {
         // Remove whitespace and line breaks from base64 string
         const cleanContent = data.content.replace(/\s/g, '');
         
-        // Robust base64 decoding
+        // Robust base64 decoding with multiple fallback methods
         let decodedContent;
         try {
+          // Method 1: Standard browser atob
           decodedContent = atob(cleanContent);
+          console.log('Successfully decoded with atob');
         } catch (basicDecodeError) {
-          // Try fallback decoding method
-          console.warn('Basic atob failed, trying alternative decode method');
-          decodedContent = Buffer.from(cleanContent, 'base64').toString('utf-8');
+          console.warn('Basic atob failed:', basicDecodeError.message);
+          
+          try {
+            // Method 2: Manual base64 decoding implementation
+            const b64ToUint6 = (nChr) => {
+              return nChr > 64 && nChr < 91
+                ? nChr - 65 : nChr > 96 && nChr < 123
+                ? nChr - 71 : nChr > 47 && nChr < 58
+                ? nChr + 4 : nChr === 43
+                ? 62 : nChr === 47
+                ? 63 : 0;
+            };
+            
+            const base64DecToArr = (sBase64) => {
+              const sB64Enc = sBase64.replace(/[^A-Za-z0-9\+\/]/g, "");
+              const nInLen = sB64Enc.length;
+              const nOutLen = (nInLen * 3 + 1) >> 2;
+              const taBytes = new Uint8Array(nOutLen);
+              
+              let nMod3, nMod4, nUint24 = 0, nOutIdx = 0;
+              
+              for (let nInIdx = 0; nInIdx < nInLen; nInIdx++) {
+                nMod4 = nInIdx & 3;
+                nUint24 |= b64ToUint6(sB64Enc.charCodeAt(nInIdx)) << (6 * (3 - nMod4));
+                if (nMod4 === 3 || nInLen - nInIdx === 1) {
+                  for (nMod3 = 0; nMod3 < 3 && nOutIdx < nOutLen; nMod3++, nOutIdx++) {
+                    taBytes[nOutIdx] = (nUint24 >>> (16 >>> nMod3 & 24)) & 255;
+                  }
+                  nUint24 = 0;
+                }
+              }
+              
+              return taBytes;
+            };
+            
+            const uint8ArrayToString = (ua) => {
+              const chunkSize = 8192;
+              if (ua.length < chunkSize) {
+                return String.fromCharCode.apply(null, ua);
+              }
+              
+              let result = '';
+              for (let i = 0; i < ua.length; i += chunkSize) {
+                const chunk = ua.subarray(i, i + chunkSize);
+                result += String.fromCharCode.apply(null, chunk);
+              }
+              return result;
+            };
+            
+            const bytes = base64DecToArr(cleanContent);
+            decodedContent = uint8ArrayToString(bytes);
+            console.log('Successfully decoded with custom base64 decoder');
+          } catch (manualError) {
+            console.warn('Manual base64 decoding failed:', manualError.message);
+            
+            // Method 3: Last resort - try to use window.btoa with encoding tricks
+            try {
+              // Use escape/unescape for UTF-8 handling
+              decodedContent = decodeURIComponent(escape(window.atob(cleanContent)));
+              console.log('Successfully decoded with btoa+escape');
+            } catch (lastError) {
+              console.error('All decoding methods failed');
+              throw new Error('Failed to decode base64 content after multiple attempts');
+            }
+          }
         }
         
         if (!decodedContent) {
-          throw new Error('Failed to decode content');
+          throw new Error('Failed to decode content - result is empty');
+        }
+        
+        // Save the decoded content to localStorage for persistence
+        try {
+          const cacheKey = `github_file_${data.sha}`;
+          localStorage.setItem(cacheKey, decodedContent);
+          localStorage.setItem(`${cacheKey}_meta`, JSON.stringify({
+            name: data.name,
+            path: data.path,
+            sha: data.sha,
+            size: data.size,
+            timestamp: Date.now()
+          }));
+          console.log(`Cached file content with key: ${cacheKey}`);
+        } catch (cacheError) {
+          console.warn('Could not cache file content:', cacheError.message);
+          // Non-fatal error - continue without caching
         }
         
         return {

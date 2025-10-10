@@ -62,6 +62,78 @@ const Compiler = ({ roomId, userName }) => {
   useEffect(() => {
     roomIdRef.current = roomId
   }, [roomId])
+  
+  // GitHub file recovery mechanism
+  useEffect(() => {
+    // This effect runs when the editor is ready
+    if (editorReady && monacoRef.current) {
+      // Try to restore any previously loaded GitHub files from cache
+      try {
+        // First check session storage for the most recently loaded file
+        const lastLoadedFile = sessionStorage.getItem('last_loaded_github_file');
+        if (lastLoadedFile) {
+          try {
+            const fileData = JSON.parse(lastLoadedFile);
+            console.log('Found recently loaded GitHub file in session storage:', fileData.name);
+            
+            if (fileData && fileData.content && typeof fileData.content === 'string') {
+              // Check if the file was loaded within the last hour
+              const loadTime = new Date(fileData.timestamp).getTime();
+              const now = Date.now();
+              if (now - loadTime < 3600000) { // 1 hour
+                console.log('Auto-restoring recent GitHub file:', fileData.name);
+                
+                // Set editor content
+                isRemoteChange.current = true;
+                monacoRef.current.setValue(fileData.content);
+                setCode(fileData.content);
+                
+                // Create file in workspace
+                const fileId = `github-recovered-${Date.now()}`;
+                setFiles(prev => ({ 
+                  ...prev, 
+                  [fileId]: {
+                    name: fileData.name,
+                    content: fileData.content,
+                    path: fileData.path || fileData.name,
+                    recovered: true,
+                    loadedAt: new Date().toISOString()
+                  } 
+                }));
+                
+                // Set as active file
+                setActiveFileId(fileId);
+                
+                // Show notification
+                setOutput(`Restored your last GitHub file: ${fileData.name}`);
+                setShowOutput(true);
+                setTimeout(() => setShowOutput(false), 3000);
+              }
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse last loaded file data:', parseError);
+          }
+        }
+        
+        // Also check localStorage for GitHub files cache
+        const filesCache = localStorage.getItem('github_files_cache');
+        if (filesCache) {
+          try {
+            const cachedFiles = JSON.parse(filesCache);
+            console.log(`Found ${Object.keys(cachedFiles).length} cached GitHub files`);
+            
+            // Do not automatically load these files, but keep them ready in case
+            // the user wants to access them later via a "Recent GitHub Files" menu
+            window.cachedGitHubFiles = cachedFiles;
+          } catch (cacheError) {
+            console.warn('Failed to parse GitHub files cache:', cacheError);
+          }
+        }
+      } catch (recoveryError) {
+        console.error('Error during GitHub file recovery:', recoveryError);
+      }
+    }
+  }, [editorReady])
 
   const languageOptions = [
     { id: "javascript", name: "JavaScript", version: "*" },
@@ -342,20 +414,104 @@ const Compiler = ({ roomId, userName }) => {
     setGitHubSaveModalOpen(false)
   }
   
+  // Function to open a recently loaded GitHub file from cache
+  const openCachedGitHubFile = (fileSha) => {
+    try {
+      // Try to get file from localStorage cache
+      const filesCache = JSON.parse(localStorage.getItem('github_files_cache') || '{}');
+      const cachedFile = filesCache[fileSha];
+      
+      if (!cachedFile || !cachedFile.content) {
+        setOutput('Could not find the cached file. Try loading it from GitHub again.');
+        setShowOutput(true);
+        return;
+      }
+      
+      // Create a new file entry
+      const fileId = `github-cached-${Date.now()}`;
+      const githubFile = {
+        ...cachedFile,
+        loadedAt: new Date().toISOString(),
+        fromCache: true
+      };
+      
+      // Add to files state
+      setFiles(prev => ({ ...prev, [fileId]: githubFile }));
+      
+      // Set as active file
+      setActiveFileId(fileId);
+      
+      // Update editor content
+      if (monacoRef.current) {
+        isRemoteChange.current = true;
+        monacoRef.current.setValue(cachedFile.content);
+        setCode(cachedFile.content);
+      }
+      
+      // Update cached file's access timestamp
+      filesCache[fileSha].lastAccessed = Date.now();
+      localStorage.setItem('github_files_cache', JSON.stringify(filesCache));
+      
+      // Notify user
+      setOutput(`Loaded cached file: ${cachedFile.name}`);
+      setShowOutput(true);
+      
+    } catch (error) {
+      console.error('Error loading cached GitHub file:', error);
+      setOutput(`Failed to load cached file: ${error.message}`);
+      setShowOutput(true);
+    }
+  }
+  
   // Handle loading a file from GitHub
   const handleLoadFromGitHub = (fileData) => {
     if (!monacoRef.current) return
     
     try {
+      console.log('Loading GitHub file:', fileData.name);
+      console.log('Content length:', fileData.content ? fileData.content.length : 'No content');
+      
+      if (!fileData.content) {
+        throw new Error('File content is empty or undefined');
+      }
+      
+      // Make sure the content is valid text
+      let validatedContent = fileData.content;
+      if (typeof validatedContent !== 'string') {
+        console.warn('File content is not a string, attempting to convert');
+        validatedContent = String(validatedContent);
+      }
+      
       // Create a new file in the workspace with GitHub info
       const fileId = `github-${Date.now()}`
       const githubFile = {
         name: fileData.name,
-        content: fileData.content,
+        content: validatedContent,
         path: fileData.path,
         repo: fileData.repo,
         sha: fileData.sha,
         fromGitHub: true,
+        loadedAt: new Date().toISOString()
+      }
+      
+      // Store in localStorage for persistence
+      try {
+        const fileCache = JSON.parse(localStorage.getItem('github_files_cache') || '{}');
+        fileCache[fileData.sha] = {
+          ...githubFile,
+          lastAccessed: Date.now()
+        };
+        
+        // Keep only the 20 most recently accessed files to prevent localStorage overflow
+        const sortedFiles = Object.entries(fileCache)
+          .sort(([, a], [, b]) => b.lastAccessed - a.lastAccessed)
+          .slice(0, 20);
+        
+        const trimmedCache = Object.fromEntries(sortedFiles);
+        localStorage.setItem('github_files_cache', JSON.stringify(trimmedCache));
+        console.log('File cached in localStorage');
+      } catch (cacheError) {
+        console.warn('Failed to cache file in localStorage:', cacheError);
       }
       
       // Add to files state
@@ -364,10 +520,31 @@ const Compiler = ({ roomId, userName }) => {
       // Set as active file
       setActiveFileId(fileId)
       
-      // Update editor content
-      isRemoteChange.current = true
-      monacoRef.current.setValue(fileData.content)
-      setCode(fileData.content)
+      // Update editor content - with multiple safeguards
+      isRemoteChange.current = true;
+      
+      // First try direct setting
+      try {
+        console.log('Setting editor content directly');
+        monacoRef.current.setValue(validatedContent);
+      } catch (editorError) {
+        console.warn('Error setting editor value directly:', editorError);
+        
+        // Try with a slight delay
+        setTimeout(() => {
+          try {
+            console.log('Retrying with delay');
+            if (monacoRef.current) {
+              monacoRef.current.setValue(validatedContent);
+            }
+          } catch (retryError) {
+            console.error('Editor content update failed even with delay:', retryError);
+          }
+        }, 100);
+      }
+      
+      // Update the code state for components that rely on it
+      setCode(validatedContent)
       
       // Update language based on file extension if possible
       const extension = fileData.name.split('.').pop().toLowerCase()

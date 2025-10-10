@@ -161,23 +161,74 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
         setLoading(false);
         return;
       }
-
-      console.log(`Loading file: ${item.path} from ${selectedRepo.name}`);
+      
+      // First check if we have this file cached
+      const cacheKey = `github_file_${item.sha}`;
+      let fileData = null;
+      let fromCache = false;
       
       try {
-        const fileData = await getFileContent(
-          selectedRepo.owner.login,
-          selectedRepo.name,
-          item.path
-        );
+        const cachedContent = localStorage.getItem(cacheKey);
+        const cachedMetadata = localStorage.getItem(`${cacheKey}_meta`);
         
-        if (!fileData || !fileData.content) {
-          throw new Error('No content received from GitHub API');
+        if (cachedContent && cachedMetadata) {
+          const metadata = JSON.parse(cachedMetadata);
+          // Only use cache if it's the same file (check path and sha)
+          if (metadata.path === item.path && metadata.sha === item.sha) {
+            console.log(`Found cached file: ${item.name}`);
+            fileData = {
+              content: cachedContent,
+              sha: metadata.sha,
+              name: metadata.name,
+              path: metadata.path,
+              size: metadata.size
+            };
+            fromCache = true;
+          }
         }
+      } catch (cacheError) {
+        console.warn('Error accessing cache:', cacheError);
+        // Continue with API request if cache access fails
+      }
+      
+      if (!fileData) {
+        console.log(`Loading file from GitHub API: ${item.path} from ${selectedRepo.name}`);
         
-        console.log(`File loaded successfully: ${item.name}, content length: ${fileData.content.length} chars`);
-        
-        // Pass file content and metadata to parent component
+        try {
+          fileData = await getFileContent(
+            selectedRepo.owner.login,
+            selectedRepo.name,
+            item.path
+          );
+          
+          if (!fileData || !fileData.content) {
+            throw new Error('No content received from GitHub API');
+          }
+        } catch (fileError) {
+          console.error('Error loading file content:', fileError);
+          setError(`Failed to load file content: ${fileError.message || 'Unknown error'}`);
+          
+          // Add specific handling for different error types
+          if (fileError.message?.includes('too large')) {
+            setError('This file is too large to load in the editor. Please select a smaller file.');
+          } else if (fileError.message?.includes('decode')) {
+            setError('Unable to decode file content. This might be a binary file.');
+          }
+          setLoading(false);
+          return;
+        }
+      }
+      
+      console.log(`File loaded successfully ${fromCache ? '(from cache)' : '(from API)'}: ${item.name}, content length: ${fileData.content.length} chars`);
+      
+      // Validate content
+      if (typeof fileData.content !== 'string' || fileData.content.length === 0) {
+        throw new Error('File content is invalid or empty');
+      }
+      
+      // Pass file content and metadata to parent component with additional logging
+      try {
+        console.log('Sending file data to editor component...');
         onSelectFile({
           name: item.name,
           content: fileData.content,
@@ -187,22 +238,30 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
             owner: selectedRepo.owner.login,
             url: selectedRepo.html_url,
           },
-          sha: fileData.sha,
-          size: fileData.size,
+          sha: fileData.sha || item.sha,
+          size: fileData.size || item.size,
+          loadedFrom: fromCache ? 'cache' : 'api',
+          timestamp: new Date().toISOString()
         });
+        
+        // Save a copy of the file content to session storage as a backup
+        // This ensures it persists even if the callback fails
+        try {
+          sessionStorage.setItem('last_loaded_github_file', JSON.stringify({
+            name: item.name,
+            content: fileData.content,
+            path: item.path,
+            timestamp: new Date().toISOString()
+          }));
+        } catch (sessionError) {
+          console.warn('Could not save to session storage:', sessionError);
+        }
         
         // Close modal after selection
         onClose();
-      } catch (fileError) {
-        console.error('Error loading file content:', fileError);
-        setError(`Failed to load file content: ${fileError.message || 'Unknown error'}`);
-        
-        // Add specific handling for different error types
-        if (fileError.message?.includes('too large')) {
-          setError('This file is too large to load in the editor. Please select a smaller file.');
-        } else if (fileError.message?.includes('decode')) {
-          setError('Unable to decode file content. This might be a binary file.');
-        }
+      } catch (callbackError) {
+        console.error('Error passing file to editor:', callbackError);
+        setError(`Error setting up file in editor: ${callbackError.message}`);
       }
     } catch (err) {
       console.error('Error loading file:', err);

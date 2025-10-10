@@ -100,8 +100,9 @@ app.use((err, req, res, next) => {
 });
 
 // Socket.IO for real-time collaboration
-// Store room users
+// Store room users and track rooms with active calls
 const roomUsers = new Map();
+const roomsWithActiveCalls = new Set();
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -123,6 +124,13 @@ io.on("connection", (socket) => {
       userId: socket.userId,
       joinedAt: new Date().toISOString(),
     });
+    
+    // Check if there's an active call in the room
+    if (roomsWithActiveCalls.has(roomId)) {
+      // Notify the new user that a call is active
+      socket.emit("callActiveInRoom", { roomId });
+      console.log(`Notifying ${userName} about active call in room ${roomId}`);
+    }
 
     // Update session in database
     try {
@@ -347,6 +355,9 @@ io.on("connection", (socket) => {
   // WebRTC Signaling Events
   // Handle user ready for call
   socket.on("userReadyForCall", ({ roomId }) => {
+    // Track that this room has an active call
+    roomsWithActiveCalls.add(roomId);
+    
     socket.to(roomId).emit("userReadyForCall", {
       userId: socket.id,
       userName: socket.userName,
@@ -390,6 +401,22 @@ io.on("connection", (socket) => {
       userName: socket.userName,
     });
     console.log(`${socket.userName} left the call in room: ${roomId}`);
+    
+    // Check if anyone is still in the call
+    const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+    let callStillActive = false;
+    
+    if (socketsInRoom) {
+      // We need to check if any remaining user is in a call
+      // This is an approximation - we'll keep the room marked as having a call
+      // Better to assume call is still active than to falsely remove the marker
+      callStillActive = true;
+    }
+    
+    if (!callStillActive) {
+      // Remove the room from active calls list if everyone left
+      roomsWithActiveCalls.delete(roomId);
+    }
   });
 
   // Request current code state when joining

@@ -455,13 +455,33 @@ const Compiler = ({ roomId, userName }) => {
     }
   }
 
-  // Start video call
+  // Start video call with Zoom-like quality
   const startVideo = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      })
+      // Request permissions with enhanced quality settings
+      const constraints = {
+        video: {
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 30, max: 60 },
+          facingMode: "user"
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      
+      // Auto switch to video tab when starting a call
+      setActiveTab("video")
+      
+      // Show notification that video is active
+      setOutput("Video call started successfully! Others in the room will be notified.")
+      setShowOutput(true)
+      setTimeout(() => setShowOutput(false), 3000)
 
       console.log("Local stream obtained:", stream.id)
       console.log(
@@ -483,10 +503,15 @@ const Compiler = ({ roomId, userName }) => {
       // Set srcObject and explicitly play
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream
-        localVideoRef.current
-          .play()
-          .then(() => console.log("Local video playing successfully"))
-          .catch((err) => console.error("Error playing local video:", err))
+        try {
+          await localVideoRef.current.play()
+          console.log("Local video playing successfully")
+        } catch (err) {
+          console.error("Error playing local video:", err)
+          // Try auto-play as a fallback
+          localVideoRef.current.muted = true
+          localVideoRef.current.autoplay = true
+        }
       }
 
       // Add tracks to existing peer connections (if any exist from other users)
@@ -531,6 +556,9 @@ const Compiler = ({ roomId, userName }) => {
       if (socketRef.current && roomId) {
         socketRef.current.emit("userReadyForCall", { roomId })
       }
+
+      // Automatically open video tab when starting a call
+      setActiveTab("video")
 
       setOutput("Video call started! Connecting to other users...")
       setShowOutput(true)
@@ -593,10 +621,17 @@ const Compiler = ({ roomId, userName }) => {
     if (!incomingCall) return
 
     try {
-      // Start our own video
+      // Start our own video with better quality constraints
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        }
       })
 
       console.log("Call accepted, local stream obtained:", stream.id)
@@ -612,25 +647,49 @@ const Compiler = ({ roomId, userName }) => {
           .catch((err) => console.error("Error playing local video:", err))
       }
 
-      // Create peer connection with the caller
-      await createPeerConnection(incomingCall.from, true)
+      // Check if this is a room call (joining an existing call) or direct call
+      if (incomingCall.from === "room") {
+        // This is for joining an active room call
+        // Signal that we're ready for call to everyone in the room
+        socketRef.current.emit("userReadyForCall", { roomId });
+        
+        // Clear incoming call notification but keep video tab active
+        setIncomingCall(null);
+        setOutput(`You joined the active video call`);
+        setShowOutput(true);
+        setTimeout(() => setShowOutput(false), 5000);
+      } else {
+        // Create peer connection with the specific caller
+        await createPeerConnection(incomingCall.from, true);
 
-      // Clear incoming call notification
-      setIncomingCall(null)
-      setOutput(`Connected with ${incomingCall.userName}`)
-      setShowOutput(true)
-      setTimeout(() => setShowOutput(false), 3000)
+        // Clear incoming call notification
+        setIncomingCall(null);
+        setOutput(`Connected with ${incomingCall.userName}`);
+        setShowOutput(true);
+        setTimeout(() => setShowOutput(false), 3000);
+      }
     } catch (error) {
-      console.error("Error accepting call:", error)
-      setOutput("Could not accept call. Please check camera/microphone permissions.")
-      setShowOutput(true)
-      setIncomingCall(null)
+      console.error("Error accepting call:", error);
+      setOutput("Could not accept call. Please check camera/microphone permissions.");
+      setShowOutput(true);
+      setIncomingCall(null);
     }
   }
 
   // Reject incoming call
   const rejectCall = () => {
-    if (!incomingCall) return
+    if (!incomingCall) return;
+    
+    // Special handling for room calls
+    if (incomingCall.from === "room") {
+      setOutput(`You declined to join the active video call`);
+    } else {
+      setOutput(`Declined call from ${incomingCall.userName}`);
+    }
+    
+    setShowOutput(true);
+    setTimeout(() => setShowOutput(false), 3000);
+    setIncomingCall(null);
 
     console.log("Call rejected from:", incomingCall.userName)
     setIncomingCall(null)
@@ -864,6 +923,34 @@ console.log("white");
     socketRef.current = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
     })
+    
+    // Handler for when joining a room with active call
+    socketRef.current.on("callActiveInRoom", async ({ roomId }) => {
+      console.log("Active call detected in room:", roomId)
+      
+      // Show notification about active call
+      setOutput(`There's an active video call in this room. Would you like to join?`)
+      setShowOutput(true)
+      
+      // Auto-open the video tab
+      setActiveTab("video")
+      
+      // Display join call button
+      setIncomingCall({ 
+        from: "room", // Special identifier for room calls
+        userName: "Room Members" 
+      })
+      
+      // Show browser notification if possible
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Active Video Call', {
+          body: `There's an ongoing video call in this room. Click to join.`,
+          icon: '/favicon.ico'
+        });
+      } else if ('Notification' in window && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
+    })
 
     // Restore session state from database
     const restoreSession = async () => {
@@ -1060,12 +1147,55 @@ console.log("white");
       if (userId !== socketRef.current.id) {
         // If we don't have local stream, show incoming call notification
         if (!localStream) {
+          // Set incoming call state with caller details
           setIncomingCall({ from: userId, userName: callerName })
-          setOutput(`Incoming call from ${callerName}`)
+          
+          // Show prominent notification in the UI
+          setOutput(`📞 Incoming video call from ${callerName}! Click "Accept" to join the meeting.`)
           setShowOutput(true)
+          
+          // Play a ringtone sound (if available)
+          try {
+            const audio = new Audio('/call-ringtone.mp3');
+            audio.loop = true;
+            audio.play().catch(err => console.log('Could not play ringtone', err));
+            // Store audio reference to stop it later
+            window._callRingtone = audio;
+          } catch (err) {
+            console.log('Error playing ringtone:', err);
+          }
+          
+          // Show a browser notification if possible
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const notification = new Notification('Incoming Video Call', {
+              body: `${callerName} is calling you. Click to answer.`,
+              icon: '/favicon.ico',
+              requireInteraction: true
+            });
+            
+            // Focus window when notification is clicked
+            notification.onclick = function() {
+              window.focus();
+              setActiveTab("video");
+            }
+          } else if ('Notification' in window && Notification.permission !== 'denied') {
+            // Request permission
+            Notification.requestPermission();
+          }
+          
+          // Switch to video tab to make call more visible
+          setActiveTab("video")
         } else {
           // Auto-accept if we already have video on
           await createPeerConnection(userId, true)
+          
+          // Display notification that someone joined the call
+          setOutput(`${callerName} joined the video call`)
+          setShowOutput(true)
+          setTimeout(() => setShowOutput(false), 3000)
+          
+          // Make sure video tab is visible
+          setActiveTab("video")
         }
       }
     })
@@ -1831,147 +1961,261 @@ console.log("white");
                 {/* Video Tab Content */}
                 {activeTab === "video" && (
                   <div className="space-y-4">
-                    {/* Local Video */}
-                    {localStream && (
-                      <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
-                        <video
-                          ref={(video) => {
-                            localVideoRef.current = video
-                            if (video && localStream) {
-                              console.log("Setting local video srcObject")
-                              video.srcObject = localStream
-                              video
-                                .play()
-                                .then(() => console.log("Local video element playing"))
-                                .catch((e) => console.error("Error playing local video element:", e))
-                            }
-                          }}
-                          autoPlay
-                          muted
-                          playsInline
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white">
-                          {user?.name || userName || "You"}
+                    {/* Call Status */}
+                    {Object.keys(remoteStreams).length > 0 && (
+                      <div className="bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2 flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 bg-green-600 rounded-full animate-pulse"></div>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-400">
+                          Video call active with {Object.keys(remoteStreams).length} {Object.keys(remoteStreams).length === 1 ? 'person' : 'people'}
+                        </p>
+                      </div>
+                    )}
+                  
+                    {/* Grid of Videos - Show grid only when there are participants */}
+                    {(localStream || Object.keys(remoteStreams).length > 0) && (
+                      <div className={`grid gap-2 ${Object.keys(remoteStreams).length > 0 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                        {/* Local Video */}
+                        {localStream && (
+                          <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
+                            <video
+                              ref={(video) => {
+                                localVideoRef.current = video
+                                if (video && localStream) {
+                                  console.log("Setting local video srcObject")
+                                  video.srcObject = localStream
+                                  video
+                                    .play()
+                                    .then(() => console.log("Local video element playing"))
+                                    .catch((e) => console.error("Error playing local video element:", e))
+                                }
+                              }}
+                              autoPlay
+                              muted
+                              playsInline
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white">
+                              {user?.name || userName || "You"} (You)
+                            </div>
+                            {/* Video status indicators */}
+                            <div className="absolute top-2 right-2 flex gap-1.5">
+                              {!isVideoOn && (
+                                <div className="bg-red-600 p-1 rounded-full">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                  </svg>
+                                </div>
+                              )}
+                              {!isAudioOn && (
+                                <div className="bg-red-600 p-1 rounded-full">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Remote Videos - Zoom-like Grid Layout */}
+                        <div className={`grid gap-2 w-full ${
+                          Object.keys(remoteStreams).length <= 1 ? "grid-cols-1" :
+                          Object.keys(remoteStreams).length <= 4 ? "grid-cols-2" :
+                          Object.keys(remoteStreams).length <= 9 ? "grid-cols-3" : "grid-cols-4"
+                        }`}>
+                          {Object.entries(remoteStreams).map(([userId, stream]) => {
+                            const remoteUser = roomUsers.find((u) => u.id === userId)
+                            const userName = remoteUser?.name || "Remote User"
+                            const hasAudio = stream.getAudioTracks().length > 0
+                            const audioEnabled = hasAudio && stream.getAudioTracks()[0].enabled
+                            const hasVideo = stream.getVideoTracks().length > 0
+                            const videoEnabled = hasVideo && stream.getVideoTracks()[0].enabled
+                            
+                            return (
+                              <div key={userId} className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video transition-all duration-300 hover:shadow-lg hover:scale-105">
+                                {/* Video Container */}
+                                <video
+                                  autoPlay
+                                  playsInline
+                                  className={`w-full h-full ${videoEnabled ? 'object-cover' : 'hidden'}`}
+                                  ref={(video) => {
+                                    if (video && stream) {
+                                      console.log(`Setting srcObject for ${userName} (${userId})`)
+                                      video.srcObject = stream
+                                      // Force video to play
+                                      video.play().catch((e) => console.error("Error playing video:", e))
+                                    }
+                                  }}
+                                />
+                                
+                                {/* Placeholder if video is turned off */}
+                                {(!hasVideo || !videoEnabled) && (
+                                  <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                                    <div className="rounded-full bg-gray-600 w-20 h-20 flex items-center justify-center">
+                                      <span className="text-2xl text-white font-semibold">
+                                        {userName.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* User name label */}
+                                <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-sm text-white flex items-center gap-1">
+                                  {!audioEnabled && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                                    </svg>
+                                  )}
+                                  <span>{userName}</span>
+                                </div>
+                                
+                                {/* Status indicators */}
+                                <div className="absolute top-2 right-2 flex space-x-1">
+                                  {!videoEnabled && (
+                                    <div className="bg-red-600 p-1 rounded-full" title="Video off">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                                        <path d="M13.5 6.5L21 15"></path>
+                                        <path d="M3 3l18 18"></path>
+                                        <rect x="1" y="5" width="15" height="14" rx="2"></rect>
+                                      </svg>
+                                    </div>
+                                  )}
+                                  {!audioEnabled && (
+                                    <div className="bg-red-600 p-1 rounded-full" title="Microphone muted">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                                        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                                        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
+                    
+                    {/* Screen Share Section */}
+                    {(screenStream || Object.entries(remoteScreenShares).length > 0) && (
+                      <div className="space-y-2 mt-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Screen Shares</h3>
+                        <div className="grid gap-2 grid-cols-1">
+                          {/* Your Own Screen Share */}
+                          {screenStream && (
+                            <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
+                              <video
+                                ref={screenVideoRef}
+                                autoPlay
+                                muted
+                                playsInline
+                                className="w-full h-full object-contain"
+                              />
+                              <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white flex items-center gap-1">
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                {user?.name || userName || "Your Screen"}
+                              </div>
+                            </div>
+                          )}
 
-                    {/* Remote Videos */}
-                    {Object.entries(remoteStreams).map(([userId, stream]) => {
-                      const userName = roomUsers.find((u) => u.id === userId)?.name || "Remote User"
-                      return (
-                        <div key={userId} className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
-                          <video
-                            autoPlay
-                            playsInline
-                            className="w-full h-full object-cover"
-                            ref={(video) => {
-                              if (video && stream) {
-                                console.log(`Setting srcObject for ${userName} (${userId})`)
-                                video.srcObject = stream
-                                // Force video to play
-                                video.play().catch((e) => console.error("Error playing video:", e))
-                              }
-                            }}
-                          />
-                          <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white">
-                            {userName}
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    {/* Screen Share Video (Your Own) */}
-                    {screenStream && (
-                      <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
-                        <video
-                          ref={screenVideoRef}
-                          autoPlay
-                          muted
-                          playsInline
-                          className="w-full h-full object-contain"
-                        />
-                        <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white flex items-center gap-1">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                            <line x1="8" y1="21" x2="16" y2="21"></line>
-                            <line x1="12" y1="17" x2="12" y2="21"></line>
-                          </svg>
-                          {user?.name || userName || "Your Screen"}
+                          {/* Remote Screen Shares */}
+                          {Object.entries(remoteScreenShares).map(([userId, stream]) => {
+                            const sharerName = roomUsers.find((u) => u.id === userId)?.name || "Remote User"
+                            return (
+                              <div
+                                key={`screen-${userId}`}
+                                className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video border-2 border-orange-500"
+                              >
+                                <video
+                                  autoPlay
+                                  playsInline
+                                  className="w-full h-full object-contain"
+                                  ref={(video) => {
+                                    if (video && stream) {
+                                      console.log(`Setting remote screen share for ${sharerName} (${userId})`)
+                                      video.srcObject = stream
+                                      video
+                                        .play()
+                                        .then(() => console.log(`Remote screen share from ${sharerName} playing`))
+                                        .catch((e) =>
+                                          console.error(`Error playing remote screen share from ${sharerName}:`, e),
+                                        )
+                                    }
+                                  }}
+                                />
+                                <div className="absolute bottom-2 left-2 bg-orange-600 px-2 py-1 rounded text-xs text-white flex items-center gap-1">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                  </svg>
+                                  {sharerName}'s Screen
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
-
-                    {/* Remote Screen Shares */}
-                    {Object.entries(remoteScreenShares).map(([userId, stream]) => {
-                      const sharerName = roomUsers.find((u) => u.id === userId)?.name || "Remote User"
-                      return (
-                        <div
-                          key={`screen-${userId}`}
-                          className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video border-2 border-orange-500"
-                        >
-                          <video
-                            autoPlay
-                            playsInline
-                            className="w-full h-full object-contain"
-                            ref={(video) => {
-                              if (video && stream) {
-                                console.log(`Setting remote screen share for ${sharerName} (${userId})`)
-                                video.srcObject = stream
-                                video
-                                  .play()
-                                  .then(() => console.log(`Remote screen share from ${sharerName} playing`))
-                                  .catch((e) =>
-                                    console.error(`Error playing remote screen share from ${sharerName}:`, e),
-                                  )
-                              }
-                            }}
-                          />
-                          <div className="absolute bottom-2 left-2 bg-orange-600 px-2 py-1 rounded text-xs text-white flex items-center gap-1">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                              <line x1="8" y1="21" x2="16" y2="21"></line>
-                              <line x1="12" y1="17" x2="12" y2="21"></line>
-                            </svg>
-                            {sharerName}'s Screen
-                          </div>
-                        </div>
-                      )
-                    })}
 
                     {/* Control Buttons */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 mt-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3 border border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Call Controls</h3>
+                      
+                      {/* Active Call Status */}
+                      {Object.keys(remoteStreams).length > 0 && !localStream && (
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2 mb-3">
+                          <p className="text-sm text-yellow-800 dark:text-yellow-400 flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" y1="8" x2="12" y2="12"></line>
+                              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            A video call is active in this room. Join to participate!
+                          </p>
+                        </div>
+                      )}
+                      
                       {/* Video Call Controls */}
                       {!localStream ? (
                         <button
                           onClick={startVideo}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg transform hover:scale-[1.02] duration-200"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            width="18"
-                            height="18"
+                            width="20"
+                            height="20"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -1981,30 +2225,45 @@ console.log("white");
                           >
                             <polygon points="5 3 19 12 5 21 5 3"></polygon>
                           </svg>
-                          Start Video Call
+                          {Object.keys(remoteStreams).length > 0 ? 'Join Video Call' : 'Start Video Call'}
                         </button>
                       ) : (
                         <>
-                          <div className="grid grid-cols-3 gap-2">
+                          {/* Meeting Status Indicator */}
+                          <div className="mb-3 flex items-center justify-center">
+                            <div className="inline-flex items-center px-3 py-1.5 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-full">
+                              <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse mr-2"></div>
+                              <span className="text-xs font-medium text-green-800 dark:text-green-400">
+                                {Object.keys(remoteStreams).length > 0 
+                                  ? `Meeting active · ${Object.keys(remoteStreams).length + 1} participants` 
+                                  : "Video call active"}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Call Controls */}
+                          <div className="grid grid-cols-4 gap-3">
                             {/* Toggle Audio */}
                             <button
                               onClick={toggleAudio}
-                              className={`flex flex-col items-center justify-center gap-1 p-3 rounded-lg font-medium transition-colors ${
+                              className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg font-medium transition-all duration-200 ${
                                 isAudioOn
-                                  ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"
-                                  : "bg-red-600 text-white"
+                                  ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
+                                  : "bg-red-600 text-white hover:bg-red-700"
                               }`}
+                              title={isAudioOn ? "Mute microphone" : "Unmute microphone"}
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                width="18"
-                                height="18"
+                                width="22"
+                                height="22"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
                                 strokeWidth="2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
+                                className="mb-1"
                               >
                                 {isAudioOn ? (
                                   <>
@@ -2023,28 +2282,30 @@ console.log("white");
                                   </>
                                 )}
                               </svg>
-                              <span className="text-xs">{isAudioOn ? "Mute" : "Unmute"}</span>
+                              <span className="text-xs font-medium">{isAudioOn ? "Mute" : "Unmute"}</span>
                             </button>
 
                             {/* Toggle Video */}
                             <button
                               onClick={toggleVideo}
-                              className={`flex flex-col items-center justify-center gap-1 p-3 rounded-lg font-medium transition-colors ${
+                              className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg font-medium transition-all duration-200 ${
                                 isVideoOn
-                                  ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"
-                                  : "bg-red-600 text-white"
+                                  ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
+                                  : "bg-red-600 text-white hover:bg-red-700"
                               }`}
+                              title={isVideoOn ? "Turn off camera" : "Turn on camera"}
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                width="18"
-                                height="18"
+                                width="22"
+                                height="22"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
                                 strokeWidth="2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
+                                className="mb-1"
                               >
                                 {isVideoOn ? (
                                   <>
@@ -2058,87 +2319,162 @@ console.log("white");
                                   </>
                                 )}
                               </svg>
-                              <span className="text-xs">{isVideoOn ? "Stop" : "Start"}</span>
+                              <span className="text-xs font-medium">{isVideoOn ? "Stop Video" : "Start Video"}</span>
+                            </button>
+
+                            {/* Screen Share */}
+                            <button
+                              onClick={screenStream ? stopScreenShare : startScreenShare}
+                              className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg font-medium transition-all duration-200 
+                              ${screenStream 
+                                ? "bg-green-600 text-white hover:bg-green-700" 
+                                : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+                              title={screenStream ? "Stop screen sharing" : "Share your screen"}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="22"
+                                height="22"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="mb-1"
+                              >
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="8" y1="21" x2="16" y2="21"></line>
+                                <line x1="12" y1="17" x2="12" y2="21"></line>
+                              </svg>
+                              <span className="text-xs font-medium">
+                                {screenStream ? "Stop Share" : "Share Screen"}
+                              </span>
                             </button>
 
                             {/* End Call */}
                             <button
                               onClick={stopVideo}
-                              className="flex flex-col items-center justify-center gap-1 p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                              className="flex flex-col items-center justify-center gap-1.5 p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-all duration-200"
+                              title="Leave video call"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="22"
+                                height="22"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="mb-1"
+                              >
+                                <path d="M16 2v4"></path>
+                                <path d="M8 2v4"></path>
+                                <path d="M22 8H2"></path>
+                                <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9V8h18v4Z"></path>
+                                <line x1="7" y1="15" x2="17" y2="15"></line>
+                              </svg>
+                              <span className="text-xs font-medium">Leave Call</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                      
+                      {/* Participants Count */}
+                      {Object.keys(remoteStreams).length > 0 && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
+                          {Object.keys(remoteStreams).length} {Object.keys(remoteStreams).length === 1 ? 'participant' : 'participants'} connected
+                        </div>
+                      )}
+
+                      {/* Screen Share Controls */}
+                      {localStream && (
+                        <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Screen Sharing</h3>
+                          {!isScreenSharing ? (
+                            <button
+                              onClick={startScreenShare}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 width="18"
                                 height="18"
                                 viewBox="0 0 24 24"
-                                fill="currentColor"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
                               >
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"></path>
-                                <circle cx="12" cy="12" r="5" fill="currentColor"></circle>
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="8" y1="21" x2="16" y2="21"></line>
+                                <line x1="12" y1="17" x2="12" y2="21"></line>
                               </svg>
-                              <span className="text-xs">End</span>
+                              Share Your Screen
                             </button>
-                          </div>
-                        </>
-                      )}
-
-                      {/* Screen Share Controls */}
-                      {!isScreenSharing ? (
-                        <button
-                          onClick={startScreenShare}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                            <line x1="8" y1="21" x2="16" y2="21"></line>
-                            <line x1="12" y1="17" x2="12" y2="21"></line>
-                          </svg>
-                          Share Screen
-                        </button>
-                      ) : (
-                        <button
-                          onClick={stopScreenShare}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                            <line x1="8" y1="21" x2="16" y2="21"></line>
-                            <line x1="12" y1="17" x2="12" y2="21"></line>
-                            <line x1="2" y1="2" x2="22" y2="22"></line>
-                          </svg>
-                          Stop Sharing
-                        </button>
+                          ) : (
+                            <button
+                              onClick={stopScreenShare}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="8" y1="21" x2="16" y2="21"></line>
+                                <line x1="12" y1="17" x2="12" y2="21"></line>
+                                <line x1="2" y1="2" x2="22" y2="22"></line>
+                              </svg>
+                              Stop Screen Sharing
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
 
-                    {/* Info */}
+                    {/* Info & Tips */}
                     <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <p className="text-xs text-gray-600 dark:text-gray-300">
-                        <span className="font-semibold text-blue-600 dark:text-blue-400">💡 Tip:</span>{" "}
-                        {localStream || screenStream
-                          ? "Your video/screen is being shared with collaborators"
-                          : "Start your camera or share your screen to collaborate visually"}
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">
+                        <span className="font-semibold text-blue-600 dark:text-blue-400">💡 Tips:</span>
                       </p>
+                      <ul className="text-xs text-gray-600 dark:text-gray-300 space-y-1.5 list-disc pl-4">
+                        <li>
+                          {localStream || screenStream
+                            ? "Your video/audio is now being shared with all collaborators in the room"
+                            : "Start a video call to communicate face-to-face with your collaborators"}
+                        </li>
+                        <li>Toggle your camera and microphone anytime during the call</li>
+                        <li>Share your screen to demonstrate code or show other applications</li>
+                        <li>All participants in the room will be automatically connected to the call</li>
+                      </ul>
+                    </div>
+                    
+                    {/* Room Connection Status */}
+                    <div className="p-3 mt-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Room Status</h3>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 bg-green-600 rounded-full animate-pulse"></div>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">
+                          Connected to room: <span className="font-semibold">{roomId || 'Personal Workspace'}</span>
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">
+                          {roomUsers.length} {roomUsers.length === 1 ? 'user' : 'users'} connected
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}

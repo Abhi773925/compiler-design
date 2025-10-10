@@ -22,9 +22,18 @@ const FilesTab = ({
   // Fetch saved files from the backend
   useEffect(() => {
     if (user && view === 'saved') {
+      console.log('Loading saved files for user:', user.name || user.id);
       loadSavedFiles();
     }
   }, [user, view]);
+  
+  // Also load saved files when first mounting if user is already logged in
+  useEffect(() => {
+    if (user && view === 'saved') {
+      console.log('Initial load of saved files');
+      loadSavedFiles();
+    }
+  }, []);
 
   const loadSavedFiles = async () => {
     if (!user) return;
@@ -34,6 +43,7 @@ const FilesTab = ({
       setError(null);
       
       const files = await getUserFiles();
+      console.log('Loaded saved files:', files);
       setSavedFiles(files || []);
     } catch (err) {
       console.error('Error loading saved files:', err);
@@ -58,12 +68,13 @@ const FilesTab = ({
       setError(null);
       
       const file = await getFileById(fileId);
+      console.log('Retrieved file from database:', file);
       
       if (file && file.content) {
         // Create file in workspace
-        const newFileId = `saved-${Date.now()}`;
+        const newFileId = `saved-${file._id}-${Date.now()}`;
         
-        // Call the parent component's onLoadFile function
+        // Call the parent component's onLoadFile function with complete file data
         onLoadFile({
           fileId: newFileId,
           name: file.name,
@@ -71,9 +82,18 @@ const FilesTab = ({
           source: 'database',
           metadata: {
             originalId: file._id,
-            ...file.metadata
-          }
+            ...(file.metadata || {})
+          },
+          // Add any GitHub-related info if this was a GitHub file
+          ...(file.source === 'github' && file.metadata ? {
+            fromGitHub: true,
+            path: file.metadata.path,
+            repo: file.metadata.repo,
+            sha: file.metadata.sha
+          } : {})
         });
+      } else {
+        setError(`File "${file?.name || 'unknown'}" couldn't be loaded or has no content.`);
       }
     } catch (err) {
       console.error('Error loading file:', err);

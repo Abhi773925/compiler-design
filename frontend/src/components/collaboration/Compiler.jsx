@@ -3236,10 +3236,11 @@ console.log("white");
       setFiles(prev => ({ ...prev, [fileId]: { name: file.name, content: text } }))
       setActiveFileId(fileId)
       
-      // Also save to database if user is logged in
+      // Save to database if user is logged in
+      let savedToDatabase = false;
       if (user && user.id) {
         try {
-          await saveFileToDatabase({
+          const savedFile = await saveFileToDatabase({
             name: file.name,
             content: text,
             source: 'local-upload',
@@ -3249,52 +3250,67 @@ console.log("white");
               lastModified: new Date(file.lastModified).toISOString()
             }
           });
+          
+          if (savedFile) {
+            console.log('File saved to database successfully:', savedFile);
+            savedToDatabase = true;
+          }
         } catch (saveError) {
           console.error('Error saving file to database:', saveError);
+          // Continue with the upload even if database save fails
         }
       }
       
       // Share with other users in room via socket
-      socketRef.current.emit('uploadFile', {
-        roomId: roomIdRef.current,
-        fileId,
-        name: file.name,
-        mime: file.type,
-        size: file.size,
-        content: text,
-        uploadedBy: user?._id || socketRef.current.id,
-        uploaderName: user?.name || userName || "Anonymous"
-      })
-      
-      // Set as active file
-      socketRef.current.emit('setActiveFile', { roomId: roomIdRef.current, fileId })
-      
-      // Save to database
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com"
-      await fetch(`${BACKEND_URL}/api/sessions/${roomIdRef.current}/files`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      if (socketRef.current && roomIdRef.current) {
+        socketRef.current.emit('uploadFile', {
+          roomId: roomIdRef.current,
           fileId,
           name: file.name,
-          content: text,
           mime: file.type,
           size: file.size,
-          uploadedBy: user?._id || socketRef.current.id,
+          content: text,
+          uploadedBy: user?._id || user?.id || socketRef.current.id,
           uploaderName: user?.name || userName || "Anonymous"
-        }),
-      })
+        });
+        
+        // Set as active file
+        socketRef.current.emit('setActiveFile', { roomId: roomIdRef.current, fileId });
+      }
       
-      setOutput(`File "${file.name}" uploaded successfully!`)
-      setTimeout(() => setShowOutput(false), 3000)
+      // Save to session database (for room persistence)
+      if (roomIdRef.current) {
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://compiler-design.onrender.com"
+        await fetch(`${BACKEND_URL}/api/sessions/${roomIdRef.current}/files`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fileId,
+            name: file.name,
+            content: text,
+            mime: file.type,
+            size: file.size,
+            uploadedBy: user?._id || user?.id || socketRef.current?.id,
+            uploaderName: user?.name || userName || "Anonymous"
+          }),
+        });
+      }
+      
+      // Show different message depending on whether it was saved to database
+      if (savedToDatabase) {
+        setOutput(`File "${file.name}" uploaded successfully and saved to your files!`);
+      } else {
+        setOutput(`File "${file.name}" uploaded successfully!`);
+      }
+      setTimeout(() => setShowOutput(false), 3000);
     } catch (e) {
-      console.error('Error uploading file:', e)
-      setOutput(`Error uploading file: ${e.message}`)
-      setShowOutput(true)
+      console.error('Error uploading file:', e);
+      setOutput(`Error uploading file: ${e.message}`);
+      setShowOutput(true);
     } finally {
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -3409,79 +3425,144 @@ console.log("white");
 
   // Handle file selection from GitHub
   const handleFileSelection = (fileData) => {
-    // Set the editor language based on file extension
-    const fileExtension = fileData.name.split('.').pop().toLowerCase();
-    const extensionToLanguage = {
-      js: 'javascript',
-      py: 'python',
-      java: 'java',
-      cpp: 'cpp',
-      c: 'c',
-      cs: 'csharp',
-      ts: 'typescript',
-      go: 'go',
-      rs: 'rust',
-      php: 'php',
-      rb: 'ruby',
-      kt: 'kotlin',
-      swift: 'swift',
-      r: 'r',
-      sql: 'sql',
-      html: 'html',
-      css: 'css',
-      md: 'markdown',
-      json: 'json',
-    };
+    if (!monacoRef.current) return;
     
-    const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
-    
-    // Update file content in editor
-    setCode(fileData.content);
-    
-    // Update language if we can determine it
-    if (detectedLanguage) {
-      setLanguage(detectedLanguage);
-    }
-    
-    // Update file name/path display
-    setActiveFileId(fileData.name);
-    
-    // Create a file entry for the local state
-    const newFileId = `${fileData.name}-${Date.now()}`;
-    setFiles(prev => ({ ...prev, [newFileId]: { 
-      name: fileData.name, 
-      content: fileData.content 
-    }}));
-    
-    // Save to database if user is logged in
-    if (user && user.id) {
-      saveFileToDatabase({
+    try {
+      console.log('Loading GitHub file:', fileData.name);
+      
+      if (!fileData.content) {
+        throw new Error('File content is empty or undefined');
+      }
+      
+      // Make sure the content is valid text
+      let validatedContent = fileData.content;
+      if (typeof validatedContent !== 'string') {
+        console.warn('File content is not a string, attempting to convert');
+        validatedContent = String(validatedContent);
+      }
+      
+      // Set the editor language based on file extension
+      const fileExtension = fileData.name.split('.').pop().toLowerCase();
+      const extensionToLanguage = {
+        js: 'javascript',
+        py: 'python',
+        java: 'java',
+        cpp: 'cpp',
+        c: 'c',
+        cs: 'csharp',
+        ts: 'typescript',
+        go: 'go',
+        rs: 'rust',
+        php: 'php',
+        rb: 'ruby',
+        kt: 'kotlin',
+        swift: 'swift',
+        r: 'r',
+        sql: 'sql',
+        html: 'html',
+        css: 'css',
+        md: 'markdown',
+        json: 'json',
+      };
+      
+      const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
+      
+      // Create a new file in the workspace with GitHub info
+      const fileId = `github-${Date.now()}`;
+      const githubFile = {
         name: fileData.name,
-        content: fileData.content,
-        source: 'github',
-        metadata: {
-          path: fileData.path,
-          repo: fileData.repo,
-          sha: fileData.sha,
-          size: fileData.size,
-          lastModified: new Date().toISOString()
-        }
-      }).then(savedFile => {
-        if (savedFile) {
-          console.log('GitHub file saved to database:', savedFile);
-          setOutput(`File "${fileData.name}" loaded from GitHub and saved to your files.`);
+        content: validatedContent,
+        path: fileData.path,
+        repo: fileData.repo,
+        sha: fileData.sha,
+        fromGitHub: true,
+        loadedAt: new Date().toISOString()
+      };
+      
+      // Add to files state
+      setFiles(prev => ({ ...prev, [fileId]: githubFile }));
+      
+      // Set as active file
+      setActiveFileId(fileId);
+      
+      // Update editor content
+      isRemoteChange.current = true;
+      monacoRef.current.setValue(validatedContent);
+      setCode(validatedContent);
+      
+      // Update language
+      if (detectedLanguage) {
+        setLanguage(detectedLanguage);
+      }
+      
+      // Save to database if user is logged in
+      if (user && user.id) {
+        saveFileToDatabase({
+          name: fileData.name,
+          content: validatedContent,
+          source: 'github',
+          metadata: {
+            path: fileData.path,
+            repo: fileData.repo,
+            sha: fileData.sha,
+            size: validatedContent.length,
+            lastModified: new Date().toISOString()
+          }
+        }).then(savedFile => {
+          if (savedFile) {
+            console.log('GitHub file saved to database:', savedFile);
+            
+            // Update saved files list to include the new file
+            setSavedFiles(prev => {
+              const exists = prev.some(f => f._id === savedFile._id);
+              if (exists) {
+                return prev.map(f => f._id === savedFile._id ? savedFile : f);
+              } else {
+                return [...prev, savedFile];
+              }
+            });
+            
+            setOutput(`File "${fileData.name}" loaded from GitHub and saved to your files.`);
+            setShowOutput(true);
+          }
+        }).catch(error => {
+          console.error('Error saving GitHub file to database:', error);
+          setOutput(`File "${fileData.name}" loaded from GitHub, but couldn't be saved to your files.`);
           setShowOutput(true);
-        }
-      }).catch(error => {
-        console.error('Error saving GitHub file to database:', error);
-      });
-    }
-    
-    // Notify collaborators if in a room
-    if (roomId && socketRef.current) {
-      socketRef.current.emit('code-change', { code: fileData.content, language: detectedLanguage });
-      socketRef.current.emit('language-change', detectedLanguage);
-      socketRef.current.emit('filename-change', fileData.name);
+        });
+      } else {
+        setOutput(`File "${fileData.name}" loaded from GitHub. Log in to save it to your files.`);
+        setShowOutput(true);
+      }
+      
+      // Emit to other users if in a room
+      if (socketRef.current && roomId) {
+        socketRef.current.emit("uploadFile", {
+          roomId,
+          fileId,
+          name: fileData.name,
+          content: validatedContent,
+          mime: `text/${detectedLanguage || 'plain'}`,
+          size: validatedContent.length,
+          uploadedBy: user?._id || user?.id || socketRef.current.id,
+          uploaderName: user?.name || userName || "Anonymous",
+          source: "github",
+          metadata: {
+            repo: fileData.repo,
+            path: fileData.path,
+            sha: fileData.sha
+          }
+        });
+        
+        // Set as active file for everyone
+        socketRef.current.emit("setActiveFile", { roomId, fileId });
+      }
+      
+      setTimeout(() => setShowOutput(false), 3000);
+    } catch (error) {
+      console.error('Error loading file from GitHub:', error);
+      setOutput(`Error loading from GitHub: ${error.message}`);
+      setShowOutput(true);
     }
   };
 

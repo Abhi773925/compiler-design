@@ -151,37 +151,59 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
         setLoading(false);
         return;
       }
+      
+      // Check file extension and only load text files
+      const fileExtension = item.name.split('.').pop().toLowerCase();
+      const binaryExtensions = ['exe', 'dll', 'so', 'dylib', 'bin', 'dat', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'ico', 'zip', 'tar', 'gz', 'pdf'];
+      
+      if (binaryExtensions.includes(fileExtension)) {
+        setError(`Binary files like ${fileExtension} are not supported. Please select a text file.`);
+        setLoading(false);
+        return;
+      }
 
       console.log(`Loading file: ${item.path} from ${selectedRepo.name}`);
       
-      const fileData = await getFileContent(
-        selectedRepo.owner.login,
-        selectedRepo.name,
-        item.path
-      );
-      
-      if (!fileData || !fileData.content) {
-        throw new Error('No content received from GitHub API');
+      try {
+        const fileData = await getFileContent(
+          selectedRepo.owner.login,
+          selectedRepo.name,
+          item.path
+        );
+        
+        if (!fileData || !fileData.content) {
+          throw new Error('No content received from GitHub API');
+        }
+        
+        console.log(`File loaded successfully: ${item.name}, content length: ${fileData.content.length} chars`);
+        
+        // Pass file content and metadata to parent component
+        onSelectFile({
+          name: item.name,
+          content: fileData.content,
+          path: item.path,
+          repo: {
+            name: selectedRepo.name,
+            owner: selectedRepo.owner.login,
+            url: selectedRepo.html_url,
+          },
+          sha: fileData.sha,
+          size: fileData.size,
+        });
+        
+        // Close modal after selection
+        onClose();
+      } catch (fileError) {
+        console.error('Error loading file content:', fileError);
+        setError(`Failed to load file content: ${fileError.message || 'Unknown error'}`);
+        
+        // Add specific handling for different error types
+        if (fileError.message?.includes('too large')) {
+          setError('This file is too large to load in the editor. Please select a smaller file.');
+        } else if (fileError.message?.includes('decode')) {
+          setError('Unable to decode file content. This might be a binary file.');
+        }
       }
-      
-      console.log(`File loaded successfully: ${item.name}, content length: ${fileData.content.length} chars`);
-      
-      // Pass file content and metadata to parent component
-      onSelectFile({
-        name: item.name,
-        content: fileData.content,
-        path: item.path,
-        repo: {
-          name: selectedRepo.name,
-          owner: selectedRepo.owner.login,
-          url: selectedRepo.html_url,
-        },
-        sha: fileData.sha,
-        size: fileData.size,
-      });
-      
-      // Close modal after selection
-      onClose();
     } catch (err) {
       console.error('Error loading file:', err);
       setError(`Failed to load file: ${err.message || 'Unknown error'}`);

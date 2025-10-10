@@ -3069,10 +3069,10 @@ console.log("white");
     setActiveFileId(fileData.name);
     
     // Notify collaborators if in a room
-    if (roomId && socket) {
-      socket.emit('code-change', { code: fileData.content, language: detectedLanguage });
-      socket.emit('language-change', detectedLanguage);
-      socket.emit('filename-change', fileData.name);
+    if (roomId && socketRef.current) {
+      socketRef.current.emit('code-change', { code: fileData.content, language: detectedLanguage });
+      socketRef.current.emit('language-change', detectedLanguage);
+      socketRef.current.emit('filename-change', fileData.name);
     }
   };
 

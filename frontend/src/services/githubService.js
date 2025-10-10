@@ -51,7 +51,7 @@ export const handleGithubCallback = async (code, state) => {
   localStorage.removeItem('github_auth_state');
   
   // Exchange code for access token through backend with hardcoded credentials
-  const response = await fetch('https://prep-mates-backend.vercel.app/api/github/token', {
+  const response = await fetch('https://compiler-design.onrender.com/api/github/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

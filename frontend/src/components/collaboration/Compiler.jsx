@@ -37,6 +37,8 @@ const Compiler = ({ roomId, userName }) => {
   const inCallRef = useRef(false)
   const lastInviteFromRef = useRef(null)
   const lastInviteAtRef = useRef(0)
+  const jitsiApiRef = useRef(null)
+  const jitsiActiveRef = useRef(false)
   const [handRaised, setHandRaised] = useState(false) // For raise hand feature
   const [raisedHands, setRaisedHands] = useState({}) // Track users with raised hands {userId: timestamp}
   const [messages, setMessages] = useState([]) // Chat messages [{id, userId, userName, message, timestamp}]
@@ -1457,6 +1459,15 @@ const Compiler = ({ roomId, userName }) => {
 
   // Start video call with optimized quality settings
   const startVideo = async () => {
+    // Prefer Jitsi-based call for consistency
+    try {
+      if (!jitsiActiveRef.current) {
+        await startJitsiCall()
+        return
+      }
+    } catch (e) {
+      console.warn('Jitsi start failed, falling back to WebRTC:', e)
+    }
     try {
       // Request permissions with enhanced quality settings
       const constraints = {
@@ -1616,6 +1627,57 @@ const Compiler = ({ roomId, userName }) => {
       
       setShowOutput(true);
     }
+  }
+  // Jitsi Meet embedding for robust SFU-based calls
+  const loadJitsiScript = () => new Promise((resolve, reject) => {
+    if (window.JitsiMeetExternalAPI) return resolve()
+    const s = document.createElement('script')
+    s.src = 'https://meet.jit.si/external_api.js'
+    s.async = true
+    s.onload = () => resolve()
+    s.onerror = reject
+    document.body.appendChild(s)
+  })
+
+  const startJitsiCall = async () => {
+    await loadJitsiScript()
+    const domain = 'meet.jit.si'
+    const options = {
+      roomName: `compiler-room-${roomId}`,
+      parentNode: document.getElementById('jitsi-container'),
+      userInfo: { displayName: user?.name || userName || 'Guest' },
+      interfaceConfigOverwrite: {
+        MOBILE_APP_PROMO: false,
+      },
+      configOverwrite: {
+        prejoinConfig: { enabled: false },
+      },
+    }
+    if (jitsiApiRef.current) {
+      try { jitsiApiRef.current.dispose() } catch {}
+      jitsiApiRef.current = null
+    }
+    jitsiApiRef.current = new window.JitsiMeetExternalAPI(domain, options)
+    jitsiActiveRef.current = true
+    inCallRef.current = true
+    setActiveTab('video')
+
+    jitsiApiRef.current.addListener('readyToClose', () => {
+      try { jitsiApiRef.current.dispose() } catch {}
+      jitsiApiRef.current = null
+      jitsiActiveRef.current = false
+      inCallRef.current = false
+    })
+  }
+
+  const endJitsiCall = () => {
+    if (jitsiApiRef.current) {
+      try { jitsiApiRef.current.executeCommand('hangup') } catch {}
+      try { jitsiApiRef.current.dispose() } catch {}
+      jitsiApiRef.current = null
+    }
+    jitsiActiveRef.current = false
+    inCallRef.current = false
   }
 
   // Stop video call
@@ -3944,8 +4006,11 @@ console.log("white");
                       </div>
                     )}
                   
-                    {/* Grid of Videos - Show grid only when there are participants */}
-                    {(localStream || Object.keys(remoteStreams).length > 0) && (
+                    {/* Jitsi container for SFU-based calls */}
+                    <div id="jitsi-container" className="w-full rounded-lg overflow-hidden" style={{ minHeight: 320 }} />
+
+                    {/* Grid of Videos - Show grid only when using native WebRTC */}
+                    {(localStream || Object.keys(remoteStreams).length > 0) && !jitsiActiveRef.current && (
                       <div className={`grid gap-2 ${Object.keys(remoteStreams).length > 0 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                         {/* Local Video */}
                         {localStream && (
@@ -4359,7 +4424,7 @@ console.log("white");
 
                             {/* End Call */}
                             <button
-                              onClick={stopVideo}
+                              onClick={() => { jitsiActiveRef.current ? endJitsiCall() : stopVideo() }}
                               className="flex flex-col items-center justify-center gap-1.5 p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-all duration-200"
                               title="Leave video call"
                             >

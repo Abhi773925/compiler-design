@@ -828,36 +828,57 @@ const Compiler = ({ roomId, userName }) => {
     if (!incomingCall) return;
 
     try {
+      // Stop any ringtone that might be playing
+      if (window._callRingtone) {
+        window._callRingtone.pause();
+        window._callRingtone.currentTime = 0;
+        window._callRingtone = null;
+      }
+
       // Store caller info before clearing the state
       const caller = { ...incomingCall };
       
       // Set active tab to video immediately for better UX
       setActiveTab("video");
       
-      // Start our own video with optimized quality constraints
+      // Show status to user
+      setOutput("Accessing camera and microphone...");
+      setShowOutput(true);
+
+      // Start our own video with optimized quality constraints that work better across devices
       const constraints = {
         video: {
           width: { ideal: 640, max: 1280 },
           height: { ideal: 480, max: 720 },
-          frameRate: { ideal: 30 },
+          frameRate: { ideal: 24, max: 30 }, // Lower framerate for better stability
           facingMode: "user",
-          aspectRatio: { ideal: 1.7777777778 } // 16:9
         },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: { ideal: 48000 }
         }
       };
       
-      // Show status to user
-      setOutput("Accessing camera and microphone...");
-      setShowOutput(true);
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      // Try to get the media stream with a timeout to prevent hanging
+      const streamPromise = navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Add timeout for media access
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Camera access timed out")), 10000);
+      });
+      
+      const stream = await Promise.race([streamPromise, timeoutPromise]);
 
       console.log("Call accepted, local stream obtained:", stream.id);
+      console.log("Stream tracks:", stream.getTracks().map(t => ({
+        kind: t.kind,
+        enabled: t.enabled,
+        readyState: t.readyState,
+        muted: t.muted,
+        label: t.label
+      })));
+      
       setLocalStream(stream);
       setIsVideoOn(true);
       setIsAudioOn(true);
@@ -867,14 +888,24 @@ const Compiler = ({ roomId, userName }) => {
         localVideoRef.current.muted = true; // Always mute local video
         localVideoRef.current.playsInline = true;
         localVideoRef.current.setAttribute('playsinline', '');
+        localVideoRef.current.setAttribute('autoplay', '');
         
         try {
           await localVideoRef.current.play();
           console.log("Local video playing after accepting call");
         } catch (err) {
           console.error("Error playing local video:", err);
+          
+          // Alternative approach for autoplay restrictions
           localVideoRef.current.muted = true;
-          localVideoRef.current.autoplay = true;
+          
+          // Try once more with a user interaction
+          const playPromise = localVideoRef.current.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => console.log("Video played after retry"))
+              .catch(e => console.error("Video play failed after retry:", e));
+          }
         }
       }
 
@@ -906,23 +937,41 @@ const Compiler = ({ roomId, userName }) => {
         } catch (peerError) {
           console.error("Error establishing peer connection:", peerError);
           
-          // Try one more time after a short delay
+          // Try one more time after a short delay with different approach
           setTimeout(async () => {
             try {
-              console.log("Retrying peer connection...");
+              console.log("Retrying peer connection with alternative approach...");
+              
+              // First notify the caller we're ready to try again
+              socketRef.current.emit("userReadyForCall", { roomId });
+              
+              // Wait a moment for the signal to reach the other party
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              
+              // Then establish our side of the connection
               await createPeerConnection(caller.from, true);
+              
               setOutput(`Connected with ${caller.userName} after retry`);
               setShowOutput(true);
             } catch (retryError) {
               console.error("Peer connection retry failed:", retryError);
-              setOutput("Connection failed. Try refreshing the page.");
+              setOutput("Connection failed. Try refreshing the page and accepting the call again.");
               setShowOutput(true);
             }
-          }, 1000);
+          }, 2000);
         }
       }
     } catch (error) {
       console.error("Error accepting call:", error);
+      
+      // Clear any existing connection attempts
+      if (incomingCall && incomingCall.from !== "room") {
+        const callerId = incomingCall.from;
+        if (peerConnections.current[callerId]) {
+          peerConnections.current[callerId].close();
+          delete peerConnections.current[callerId];
+        }
+      }
       
       // Provide more specific error messages
       if (error.name === "NotAllowedError") {
@@ -931,12 +980,25 @@ const Compiler = ({ roomId, userName }) => {
         setOutput("Call failed: No camera or microphone found. Please check your device connections.");
       } else if (error.name === "NotReadableError") {
         setOutput("Call failed: Camera or microphone is already in use by another application.");
+      } else if (error.name === "OverconstrainedError") {
+        setOutput("Call failed: Your camera doesn't support the requested resolution. Try again with a different device.");
+      } else if (error.message === "Camera access timed out") {
+        setOutput("Call failed: Camera access timed out. Please check your device permissions and try again.");
       } else {
         setOutput(`Call failed: ${error.message || "Could not access media devices"}`);
       }
       
       setShowOutput(true);
+      // Always clean up the incoming call state to allow for new calls
       setIncomingCall(null);
+      
+      // Add option to try again with audio only if video fails
+      if (error.name === "NotFoundError" || error.name === "NotReadableError" || error.name === "OverconstrainedError") {
+        setTimeout(() => {
+          setOutput("Would you like to try connecting with audio only? Start the call again.");
+          setShowOutput(true);
+        }, 3000);
+      }
     }
   }
 
@@ -1218,7 +1280,7 @@ console.log("white");
     }
   }
 
-  // Socket.IO connection and real-time collaboration
+  // Socket.IO connection and real-time collaboration with enhanced reliability
   useEffect(() => {
     if (!roomId) return
 
@@ -1227,48 +1289,103 @@ console.log("white");
     
     console.log(`Connecting to socket server at ${SOCKET_URL}`);
     
+    // Enhanced Socket.IO connection configuration
     socketRef.current = io(SOCKET_URL, {
-      transports: ["websocket", "polling"],
-      reconnectionAttempts: 10,
+      transports: ["websocket", "polling"], // Try websocket first, fallback to polling
+      reconnectionAttempts: 15, // Increase retry attempts
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 8000, // Longer max delay for unstable networks
       timeout: 20000,
       autoConnect: true,
-      forceNew: false
+      forceNew: false, // Reuse existing connection if possible
+      multiplex: true, // Share connection with other sockets to the same URL
+      query: { roomId }, // Include roomId in connection for server-side optimization
+      extraHeaders: { // Add custom headers for better tracking
+        "X-Client-Version": "1.1.0",
+        "X-Client-Type": "browser"
+      }
     });
+    
+    // Track connection attempts
+    let connectionAttempts = 0;
+    let isFirstConnection = true;
     
     // Connection event handlers
     socketRef.current.on("connect", () => {
       console.log("Socket connected successfully with ID:", socketRef.current.id);
+      
+      // Reset connection attempts on successful connection
+      connectionAttempts = 0;
+      
       // When reconnected after disconnect, need to rejoin the room
-      if (roomId) {
-        socketRef.current.emit("joinRoom", {
-          roomId,
-          userName: user?.name || userName || "Anonymous",
-          userId: user?._id || user?.id || null,
-        });
+      socketRef.current.emit("joinRoom", {
+        roomId,
+        userName: user?.name || userName || "Anonymous",
+        userId: user?._id || user?.id || null,
+      });
+      
+      // Notify user only for reconnections, not first connection
+      if (!isFirstConnection) {
+        setOutput("Reconnected to server successfully!");
+        setShowOutput(true);
+        setTimeout(() => setShowOutput(false), 3000);
+        
+        // Re-establish video connection if we were in a call
+        if (localStream && roomsWithActiveCalls.has(roomId)) {
+          console.log("Re-establishing video connection after reconnect");
+          socketRef.current.emit("userReadyForCall", { roomId });
+        }
       }
+      
+      isFirstConnection = false;
     });
     
     socketRef.current.on("connect_error", (error) => {
       console.error("Socket connection error:", error);
-      setOutput("Connection error. Attempting to reconnect...");
+      connectionAttempts++;
+      
+      // Provide more detailed feedback based on attempt count
+      if (connectionAttempts <= 3) {
+        setOutput("Connection error. Attempting to reconnect...");
+      } else if (connectionAttempts <= 7) {
+        setOutput("Still trying to reconnect... Check your internet connection.");
+      } else {
+        setOutput("Connection problems persist. You might need to refresh the page.");
+      }
       setShowOutput(true);
+      
+      // Try to force a transport change if multiple errors
+      if (connectionAttempts === 5) {
+        socketRef.current.io.opts.transports = ["polling", "websocket"]; // Try polling first
+        console.log("Switching to polling-first strategy");
+      }
     });
     
     socketRef.current.on("disconnect", (reason) => {
       console.log("Socket disconnected:", reason);
       
+      // Handle different disconnect reasons
       if (reason === "io server disconnect") {
         // The server has forcefully disconnected
-        console.log("Attempting to reconnect to server...");
+        console.log("Server forced disconnect. Attempting to reconnect...");
         socketRef.current.connect();
+        setOutput("Server disconnected. Attempting to reconnect...");
+      } else if (reason === "transport close" || reason === "ping timeout") {
+        // Network or connectivity issue
+        setOutput("Connection lost. Reconnecting automatically...");
+        // Socket.io will try to reconnect automatically
+      } else {
+        // Other reasons
+        setOutput("Disconnected from server. Reconnecting...");
       }
       
-      // If disconnect was due to network issues, socket.io will try to reconnect automatically
-      setOutput("Disconnected from server. " + 
-                (reason === "io server disconnect" ? "Attempting to reconnect..." : "Reconnecting..."));
       setShowOutput(true);
+      
+      // Clean up any stale peer connections if we disconnect
+      if (reason !== "io client disconnect") { // If not intentional disconnect
+        // Track that we need to reestablish connections
+        window._needsReconnect = true;
+      }
     });
     
     socketRef.current.on("reconnect", (attemptNumber) => {
@@ -1276,11 +1393,37 @@ console.log("white");
       setOutput("Reconnected to server successfully!");
       setShowOutput(true);
       setTimeout(() => setShowOutput(false), 3000);
+      
+      // Re-establish video connections if we were disconnected during a call
+      if (window._needsReconnect && localStream) {
+        console.log("Re-establishing call connections after reconnect");
+        setTimeout(() => {
+          socketRef.current.emit("userReadyForCall", { roomId });
+          window._needsReconnect = false;
+        }, 1000);
+      }
+    });
+    
+    socketRef.current.on("reconnect_attempt", (attemptNumber) => {
+      console.log(`Reconnection attempt #${attemptNumber}`);
+      
+      // Switch transport strategy on later attempts
+      if (attemptNumber === 3) {
+        socketRef.current.io.opts.transports = ["polling", "websocket"];
+        console.log("Switching to polling-first for reconnection");
+      } else if (attemptNumber === 7) {
+        socketRef.current.io.opts.transports = ["websocket", "polling"];
+        console.log("Switching back to websocket-first for reconnection");
+      }
+    });
+    
+    socketRef.current.on("reconnect_error", (error) => {
+      console.error("Socket reconnection error:", error);
     });
     
     socketRef.current.on("reconnect_failed", () => {
       console.error("Socket failed to reconnect after maximum attempts");
-      setOutput("Failed to reconnect. Please refresh the page.");
+      setOutput("Failed to reconnect. Please refresh the page to continue collaborating.");
       setShowOutput(true);
     });
     
@@ -1535,30 +1678,111 @@ console.log("white");
       })
     })
 
-    // WebRTC Signaling Events
+    // Store pending ICE candidates if we receive them before creating peer connection
+    const pendingIceCandidates = useRef({});
+    
+    // Track rooms with active calls for reconnection purposes
+    const roomsWithActiveCalls = useRef(new Set());
+    
+    // WebRTC Signaling Events with enhanced reliability
     // Handle user ready for call (incoming call notification)
     socketRef.current.on("userReadyForCall", async ({ userId, userName: callerName }) => {
-      console.log("User ready for call:", userId, callerName)
+      console.log("User ready for call:", userId, callerName);
+      
+      // Remember that this room has an active call
+      roomsWithActiveCalls.current.add(roomId);
 
       if (userId !== socketRef.current.id) {
         // If we don't have local stream, show incoming call notification
         if (!localStream) {
+          // Check if there's already an incoming call notification
+          // to avoid showing multiple notifications for the same caller
+          if (incomingCall && incomingCall.from === userId) {
+            console.log("Already showing incoming call for this user, ignoring duplicate");
+            return;
+          }
+          
+          // Stop any previous ringtone that might be playing
+          if (window._callRingtone) {
+            window._callRingtone.pause();
+            window._callRingtone.currentTime = 0;
+          }
+          
           // Set incoming call state with caller details
-          setIncomingCall({ from: userId, userName: callerName })
+          setIncomingCall({ from: userId, userName: callerName });
           
           // Show prominent notification in the UI
-          setOutput(`📞 Incoming video call from ${callerName}! Click "Accept" to join the meeting.`)
-          setShowOutput(true)
+          setOutput(`📞 Incoming video call from ${callerName}! Click "Accept" to join the meeting.`);
+          setShowOutput(true);
           
-          // Play a ringtone sound (if available)
+          // Play a ringtone sound with better error handling
           try {
             const audio = new Audio('/call-ringtone.mp3');
             audio.loop = true;
-            audio.play().catch(err => console.log('Could not play ringtone', err));
+            
+            // Handle audio load errors
+            audio.addEventListener('error', (e) => {
+              console.error("Error loading ringtone:", e);
+              // Try a fallback tone if available
+              tryFallbackTone();
+            });
+            
+            // Start playing when ready
+            audio.addEventListener('canplaythrough', () => {
+              audio.play()
+                .then(() => console.log("Playing ringtone"))
+                .catch(err => {
+                  console.log('Could not play ringtone (autoplay restrictions):', err);
+                  // Try to play on next user interaction
+                  document.addEventListener('click', function playOnClick() {
+                    audio.play().catch(e => console.log("Still couldn't play:", e));
+                    document.removeEventListener('click', playOnClick);
+                  }, { once: true });
+                });
+            });
+            
             // Store audio reference to stop it later
             window._callRingtone = audio;
           } catch (err) {
-            console.log('Error playing ringtone:', err);
+            console.log('Error creating ringtone audio:', err);
+            tryFallbackTone();
+          }
+          
+          // Function to try a fallback tone using Web Audio API
+          function tryFallbackTone() {
+            try {
+              const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+              const oscillator = audioCtx.createOscillator();
+              const gainNode = audioCtx.createGain();
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioCtx.destination);
+              
+              oscillator.type = 'sine';
+              oscillator.frequency.value = 440; // A4 note
+              gainNode.gain.value = 0.3; // Lower volume
+              
+              // Create a ringing pattern
+              const now = audioCtx.currentTime;
+              gainNode.gain.setValueAtTime(0, now);
+              
+              // Loop the pattern a few times
+              for (let i = 0; i < 10; i++) {
+                const startTime = now + i * 1.2;
+                gainNode.gain.setValueAtTime(0, startTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.1);
+                gainNode.gain.setValueAtTime(0.3, startTime + 0.6);
+                gainNode.gain.linearRampToValueAtTime(0, startTime + 0.7);
+              }
+              
+              oscillator.start();
+              oscillator.stop(now + 12); // Stop after a few rings
+              
+              // Store for cleanup
+              window._fallbackTone = { oscillator, gainNode, audioCtx };
+            } catch (e) {
+              console.log("Could not create fallback tone:", e);
+            }
           }
           
           // Show a browser notification if possible
@@ -1566,7 +1790,9 @@ console.log("white");
             const notification = new Notification('Incoming Video Call', {
               body: `${callerName} is calling you. Click to answer.`,
               icon: '/favicon.ico',
-              requireInteraction: true
+              requireInteraction: true,
+              tag: 'video-call', // Prevents multiple notifications
+              vibrate: [200, 100, 200] // Vibration pattern for mobile
             });
             
             // Focus window when notification is clicked
@@ -1574,60 +1800,137 @@ console.log("white");
               window.focus();
               setActiveTab("video");
             }
+            
+            // Set timeout to close notification if not answered
+            setTimeout(() => notification.close(), 30000);
           } else if ('Notification' in window && Notification.permission !== 'denied') {
             // Request permission
             Notification.requestPermission();
           }
           
           // Switch to video tab to make call more visible
-          setActiveTab("video")
+          setActiveTab("video");
+          
+          // Auto-hide notification after 30 seconds if not answered
+          setTimeout(() => {
+            if (incomingCall && incomingCall.from === userId) {
+              console.log("Auto-rejecting unanswered call after timeout");
+              setIncomingCall(null);
+              if (window._callRingtone) {
+                window._callRingtone.pause();
+                window._callRingtone.currentTime = 0;
+                window._callRingtone = null;
+              }
+              if (window._fallbackTone) {
+                window._fallbackTone.oscillator.stop();
+                window._fallbackTone.audioCtx.close();
+                window._fallbackTone = null;
+              }
+            }
+          }, 30000);
+          
         } else {
           // Auto-accept if we already have video on
-          await createPeerConnection(userId, true)
+          console.log("Auto-accepting call since video is already on");
           
-          // Display notification that someone joined the call
-          setOutput(`${callerName} joined the video call`)
-          setShowOutput(true)
-          setTimeout(() => setShowOutput(false), 3000)
-          
-          // Make sure video tab is visible
-          setActiveTab("video")
+          try {
+            // First check if we already have a connection
+            if (peerConnections.current[userId] && 
+                peerConnections.current[userId].connectionState === 'connected') {
+              console.log(`Already connected to ${callerName}, skipping auto-accept`);
+              return;
+            }
+            
+            // Create new peer connection with remote user
+            await createPeerConnection(userId, true);
+            
+            // Display notification that someone joined the call
+            setOutput(`${callerName} joined the video call`);
+            setShowOutput(true);
+            setTimeout(() => setShowOutput(false), 3000);
+            
+            // Make sure video tab is visible
+            setActiveTab("video");
+          } catch (error) {
+            console.error(`Error auto-accepting call from ${callerName}:`, error);
+            setOutput(`Could not connect to ${callerName}. Try refreshing the page.`);
+            setShowOutput(true);
+          }
         }
       }
-    })
+    });
 
     // Handle user ready for screen share
     socketRef.current.on("userReadyForScreenShare", async ({ userId }) => {
-      console.log("User ready for screen share:", userId)
+      console.log("User ready for screen share:", userId);
+      
       if (userId !== socketRef.current.id) {
-        // Get the pending screen track if available
-        const screenTrack = window.pendingScreenTrack || null
-        await createPeerConnection(userId, true, screenTrack)
+        try {
+          // Get the pending screen track if available
+          const screenTrack = window.pendingScreenTrack || null;
+          
+          // Create peer connection for screen sharing
+          const pc = await createPeerConnection(userId, true, screenTrack);
+          console.log(`Created peer connection for screen share with ${userId}`);
+          
+          // Tag this connection as a screen share connection
+          pc._isScreenShare = true;
+        } catch (error) {
+          console.error(`Error creating screen share connection with ${userId}:`, error);
+          setOutput("Screen sharing connection failed. Try again.");
+          setShowOutput(true);
+        }
       }
-    })
+    });
 
     // Get info about existing call participants when joining
     socketRef.current.on("existingCallParticipants", async ({ participants }) => {
       console.log("Existing call participants:", participants);
       
       if (participants && participants.length > 0) {
+        // Remember that this room has an active call
+        roomsWithActiveCalls.current.add(roomId);
+        
         // Show notification about existing participants
         setOutput(`${participants.length} users already in call. Connecting...`);
         setShowOutput(true);
         
         // Create peer connections with all existing participants
-        for (const participant of participants) {
+        // with delays between connections to avoid overwhelming the network
+        for (let i = 0; i < participants.length; i++) {
+          const participant = participants[i];
+          
           try {
+            // Wait before creating next connection to distribute network load
+            if (i > 0) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            console.log(`Creating connection with existing participant ${i+1}/${participants.length}: ${participant.userName}`);
             await createPeerConnection(participant.userId, true);
-            console.log(`Created peer connection with existing participant: ${participant.userName}`);
+            console.log(`Created peer connection with ${participant.userName}`);
           } catch (error) {
             console.error(`Failed to connect to ${participant.userName}:`, error);
+            
+            // Continue with the next participant even if this one fails
+            continue;
           }
         }
+        
+        // Final connection status message
+        setTimeout(() => {
+          const activeConnections = Object.values(peerConnections.current).filter(
+            pc => pc.connectionState === 'connected' || pc.iceConnectionState === 'connected'
+          ).length;
+          
+          setOutput(`Connected to ${activeConnections} out of ${participants.length} participants`);
+          setShowOutput(true);
+          setTimeout(() => setShowOutput(false), 3000);
+        }, participants.length * 1000 + 1000); // Wait for connections to establish
       }
     });
     
-    // Handle WebRTC offer with improved reliability
+    // Handle WebRTC offer with enhanced reliability
     socketRef.current.on("webrtc-offer", async ({ offer, from, userName }) => {
       console.log(`Received WebRTC offer from ${userName || 'Unknown'} (${from})`);
       
@@ -1637,22 +1940,45 @@ console.log("white");
           const pc = peerConnections.current[from];
           
           // If connection state is failed or disconnected, close it and create a new one
-          if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.iceConnectionState === 'disconnected') {
+          if (['failed', 'disconnected', 'closed'].includes(pc.connectionState) || 
+              ['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState)) {
             console.log(`Replacing failed connection with ${from}`);
             pc.close();
             delete peerConnections.current[from];
           } else if (pc.signalingState !== 'stable') {
-            console.log(`Received offer while in ${pc.signalingState} state, handling with care`);
+            console.log(`Received offer while in ${pc.signalingState} state, handling with rollback`);
             
+            // Handle glare situation (both peers sending offers simultaneously)
             try {
-              // Create a rollback to handle glare scenarios (simultaneous offers)
-              // This is only needed for browsers that support "rollback"
-              const options = { type: 'rollback' };
-              await pc.setLocalDescription(options).catch(() => {
-                console.log('Rollback not supported, proceeding anyway');
-              });
+              // This is the "perfect negotiation" pattern
+              const offerCollision = pc.signalingState !== 'stable' && 
+                                    // If we're polite, we should accept the incoming offer
+                                    // If we're impolite, we should keep our own offer
+                                    // We decide based on socket ID comparison (lower ID is impolite)
+                                    socketRef.current.id > from;
+              
+              // If polite, rollback
+              if (offerCollision) {
+                console.log("Offer collision detected, rolling back as the polite peer");
+                
+                try {
+                  await Promise.all([
+                    pc.setLocalDescription({type: "rollback"}),
+                    pc.setRemoteDescription(new RTCSessionDescription(offer))
+                  ]);
+                } catch (e) {
+                  console.log('Perfect negotiation rollback not supported, using alternative approach');
+                  // Fall back to recreating the connection
+                  pc.close();
+                  delete peerConnections.current[from];
+                }
+              } else {
+                console.log("Offer collision detected, ignoring as the impolite peer");
+                return; // Ignore this offer, we'll stick with ours
+              }
             } catch (e) {
-              console.log('Error during rollback, but we can proceed:', e);
+              console.log('Error during collision handling:', e);
+              // Try our best to proceed anyway
             }
           }
         }
@@ -1660,19 +1986,86 @@ console.log("white");
         // Create new peer connection or use existing
         const pc = peerConnections.current[from] || await createPeerConnection(from, false);
         
-        // Set the remote description (the offer)
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        // Set the remote description (the offer) with careful error handling
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        } catch (sdpError) {
+          console.error(`Error setting remote description:`, sdpError);
+          
+          // Try one more time with a fresh connection if this fails
+          if (peerConnections.current[from]) {
+            peerConnections.current[from].close();
+            delete peerConnections.current[from];
+            
+            // Create a new connection and retry
+            console.log("Recreating connection after SDP error");
+            const newPc = await createPeerConnection(from, false);
+            await newPc.setRemoteDescription(new RTCSessionDescription(offer));
+          }
+        }
         
-        // Create and send answer
-        const answer = await pc.createAnswer({
+        // Apply any pending ICE candidates we received earlier
+        if (pendingIceCandidates.current[from] && pendingIceCandidates.current[from].length > 0) {
+          console.log(`Applying ${pendingIceCandidates.current[from].length} pending ICE candidates for ${from}`);
+          
+          try {
+            for (const candidate of pendingIceCandidates.current[from]) {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+            // Clear pending candidates after applying them
+            pendingIceCandidates.current[from] = [];
+          } catch (e) {
+            console.warn("Error applying pending ICE candidates:", e);
+          }
+        }
+        
+        // Create and send answer with specific codec preferences
+        const answerOptions = {
           offerToReceiveAudio: true,
           offerToReceiveVideo: true,
           voiceActivityDetection: true
-        });
+        };
         
+        const answer = await pc.createAnswer(answerOptions);
+        
+        // Set codec preferences if browser supports it
+        if (RTCRtpTransceiver.prototype.setCodecPreferences) {
+          try {
+            // Apply codec preferences like in createPeerConnection
+            pc.getTransceivers().forEach(transceiver => {
+              if (transceiver.receiver.track?.kind === 'audio' && 
+                  RTCRtpSender.getCapabilities('audio')) {
+                const audioCodecs = RTCRtpSender.getCapabilities('audio').codecs;
+                const opusCodecs = audioCodecs.filter(c => 
+                  c.mimeType.toLowerCase() === 'audio/opus'
+                );
+                if (opusCodecs.length > 0) {
+                  transceiver.setCodecPreferences([...opusCodecs, ...audioCodecs]);
+                }
+              }
+              
+              if (transceiver.receiver.track?.kind === 'video' && 
+                  RTCRtpSender.getCapabilities('video')) {
+                const videoCodecs = RTCRtpSender.getCapabilities('video').codecs;
+                const preferredCodecs = videoCodecs.filter(c => 
+                  c.mimeType.toLowerCase() === 'video/vp9' || 
+                  c.mimeType.toLowerCase() === 'video/vp8' ||
+                  c.mimeType.toLowerCase() === 'video/h264'
+                );
+                if (preferredCodecs.length > 0) {
+                  transceiver.setCodecPreferences([...preferredCodecs, ...videoCodecs]);
+                }
+              }
+            });
+          } catch (err) {
+            console.warn('Error setting codec preferences:', err);
+          }
+        }
+        
+        // Set local description (the answer we created)
         await pc.setLocalDescription(answer);
         
-        // Send the answer back
+        // Send the answer back through the signaling server
         socketRef.current.emit("webrtc-answer", {
           answer,
           to: from,
@@ -1688,10 +2081,23 @@ console.log("white");
         if (peerConnections.current[from]) {
           cleanupPeerConnection(from);
         }
+        
+        // Notify the user only if this was an expected connection
+        if (incomingCall && incomingCall.from === from) {
+          setOutput("Failed to establish connection. Try accepting the call again.");
+          setShowOutput(true);
+          setIncomingCall(null); // Clear incoming call state
+          
+          // Stop ringtone if playing
+          if (window._callRingtone) {
+            window._callRingtone.pause();
+            window._callRingtone = null;
+          }
+        }
       }
     });
 
-    // Handle WebRTC answer with improved reliability
+    // Handle WebRTC answer with enhanced reliability
     socketRef.current.on("webrtc-answer", async ({ answer, from, userName }) => {
       console.log(`Received WebRTC answer from ${userName || 'Unknown'} (${from})`);
       
@@ -1704,13 +2110,63 @@ console.log("white");
         
         // Check signaling state
         if (pc.signalingState === 'stable') {
-          console.warn(`Peer connection with ${from} already in stable state, ignoring answer`);
+          console.log(`Peer connection with ${from} already in stable state, ignoring answer`);
           return;
         }
         
-        // Set remote description (the answer)
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        console.log(`Successfully set remote description for ${from}`);
+        // Set remote description (the answer) with retry mechanism
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          console.log(`Successfully set remote description for ${from}`);
+        } catch (sdpError) {
+          console.error(`Error setting remote description for ${from}:`, sdpError);
+          
+          // If it's an invalid state error, try a different approach
+          if (sdpError.name === 'InvalidStateError') {
+            console.log(`Invalid state, attempting recovery for ${from}`);
+            
+            // Wait a moment and try again with a new description
+            setTimeout(async () => {
+              try {
+                if (peerConnections.current[from] && 
+                    peerConnections.current[from].signalingState !== 'stable') {
+                  // Create a new offer and try again
+                  const newOffer = await peerConnections.current[from].createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: true
+                  });
+                  
+                  await peerConnections.current[from].setLocalDescription(newOffer);
+                  socketRef.current.emit("webrtc-offer", {
+                    offer: newOffer,
+                    to: from,
+                    roomId
+                  });
+                  
+                  console.log(`Sent new offer to ${from} after invalid state`);
+                }
+              } catch (retryError) {
+                console.error(`Recovery attempt failed for ${from}:`, retryError);
+              }
+            }, 1500);
+          }
+        }
+        
+        // Apply any pending ICE candidates
+        if (pendingIceCandidates.current[from] && pendingIceCandidates.current[from].length > 0) {
+          console.log(`Applying ${pendingIceCandidates.current[from].length} pending ICE candidates for ${from}`);
+          
+          for (const candidate of pendingIceCandidates.current[from]) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+              console.warn(`Error applying pending ICE candidate for ${from}:`, e);
+            }
+          }
+          
+          // Clear pending candidates
+          pendingIceCandidates.current[from] = [];
+        }
       } catch (error) {
         console.error(`Error handling answer from ${from}:`, error);
         
@@ -1725,22 +2181,30 @@ console.log("white");
                 .then(() => console.log(`Recreated peer connection with ${from}`))
                 .catch(e => console.error(`Failed to recreate connection with ${from}:`, e));
             }
-          }, 1000);
+          }, 1500);
         }
       }
     });
 
-    // Handle ICE candidates with improved handling
+    // Handle ICE candidates with improved handling and buffering
     socketRef.current.on("ice-candidate", async ({ candidate, from }) => {
-      // Uncomment for detailed ICE logging
-      // console.log(`Received ICE candidate from ${from}:`, candidate?.candidate?.substring(0, 50) + '...');
+      // Store the candidate for debugging if needed
+      const candidateString = candidate?.candidate?.substring(0, 50) + '...';
       
       try {
         const pc = peerConnections.current[from];
+        
+        // If we don't have a peer connection yet, store candidates for later
         if (!pc) {
-          console.warn(`No peer connection found for ${from}, storing candidate for later`);
+          console.log(`No peer connection for ${from} yet, storing ICE candidate for later`);
           
-          // We could store candidates for later if needed, but we'd need a place to store them
+          // Initialize array if needed
+          if (!pendingIceCandidates.current[from]) {
+            pendingIceCandidates.current[from] = [];
+          }
+          
+          // Store candidate for later use
+          pendingIceCandidates.current[from].push(candidate);
           return;
         }
         
@@ -1750,11 +2214,30 @@ console.log("white");
           return;
         }
         
+        // If remote description isn't set yet, store candidate for later
+        if (pc.remoteDescription === null || pc.remoteDescription.type === null) {
+          console.log(`Remote description not set for ${from} yet, storing ICE candidate`);
+          
+          // Initialize array if needed
+          if (!pendingIceCandidates.current[from]) {
+            pendingIceCandidates.current[from] = [];
+          }
+          
+          // Store candidate for later use
+          pendingIceCandidates.current[from].push(candidate);
+          return;
+        }
+        
         // Try to add the ICE candidate to the peer connection
         await pc.addIceCandidate(new RTCIceCandidate(candidate))
           .catch(e => {
-            // If candidate can't be added, it might be because setRemoteDescription hasn't happened yet
             console.warn(`Failed to add ICE candidate from ${from}:`, e);
+            
+            // Store failed candidates for potential retry
+            if (!pendingIceCandidates.current[from]) {
+              pendingIceCandidates.current[from] = [];
+            }
+            pendingIceCandidates.current[from].push(candidate);
           });
       } catch (error) {
         console.error(`Error handling ICE candidate from ${from}:`, error);
@@ -1766,7 +2249,7 @@ console.log("white");
       console.error(`WebRTC error (${type}):`, message);
       
       // Show error notification to user
-      setOutput(`Connection error: ${message}`);
+      setOutput(`Connection error: ${message}. Try refreshing the page.`);
       setShowOutput(true);
       
       // If we know which user caused the error, clean up that connection

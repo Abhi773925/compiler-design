@@ -353,8 +353,8 @@ const Compiler = ({ roomId, userName }) => {
     // Create unique identifiers for timeout checks
     const connectionId = `${userId}-${Date.now()}`;
     
-    // Set a timeout to check if connection established
-    const connectionTimeout = setTimeout(() => {
+    // Store timeout ID for later cleanup if needed
+    pc._connectionTimeoutId = setTimeout(() => {
       // Only proceed if the connection reference is still valid
       if (peerConnections.current[userId] === pc) {
         // Check if connection has made progress
@@ -367,12 +367,20 @@ const Compiler = ({ roomId, userName }) => {
         if (!isConnected) {
           console.warn(`Connection timeout with ${userId}: state=${pc.iceConnectionState}, gathering=${pc.iceGatheringState}`);
           
+          // Check if this peer is still in the room
+          const isPeerInRoom = roomUsers.some(user => user.id === userId);
+          if (!isPeerInRoom) {
+            console.log(`Peer ${userId} is no longer in the room, cleaning up stale connection`);
+            cleanupPeerConnection(userId);
+            return;
+          }
+          
           if (isProgressing) {
             // Still making progress, extend timeout
             console.log(`Connection with ${userId} is still negotiating, extending timeout`);
             
             // Give it a bit more time if it's actively negotiating
-            const extensionTimeout = setTimeout(() => {
+            pc._extensionTimeoutId = setTimeout(() => {
               if (peerConnections.current[userId] === pc && 
                  !pc._hasConnected && 
                  pc.iceConnectionState !== 'connected' && 
@@ -384,7 +392,59 @@ const Compiler = ({ roomId, userName }) => {
                 if (isInitiator) {
                   console.log(`Attempting forced reconnection with ${userId} after timeout`);
                   
-                  // Clean up the existing connection
+                  // Check if room still has an active call
+                  if (!roomsWithActiveCalls.current.has(roomId)) {
+                    console.log(`No active call in room ${roomId}, skipping reconnection attempt`);
+                    cleanupPeerConnection(userId);
+                    return;
+                  }
+                  
+                  // Try ICE restart first before completely recreating the connection
+                  try {
+                    if (pc.restartIce) {
+                      console.log(`Attempting ICE restart for ${userId}`);
+                      pc.restartIce();
+                      
+                      // Give ICE restart a moment to work
+                      setTimeout(async () => {
+                        try {
+                          // If still not connected, then recreate the connection
+                          if (peerConnections.current[userId] === pc && 
+                             !pc._hasConnected &&
+                             pc.iceConnectionState !== 'connected' && 
+                             pc.iceConnectionState !== 'completed') {
+                             
+                            // Now clean up and recreate
+                            cleanupPeerConnection(userId);
+                            
+                            // Try to create a new one with a slight delay
+                            setTimeout(() => {
+                              if (roomUsers.some(user => user.id === userId)) {
+                                console.log(`Creating new connection with ${userId} after ICE restart failure`);
+                                
+                                // Create a new connection with the same screen sharing state if needed
+                                const hasScreenShare = window.pendingScreenTrack || 
+                                                     (localStream && localStream.getVideoTracks().some(
+                                                       track => track.label.includes('screen')
+                                                     ));
+                                
+                                const screenTrack = hasScreenShare ? window.pendingScreenTrack : null;
+                              }
+                            }, 1000);
+                          }
+                        } catch (err) {
+                          console.error(`Error in ICE restart follow-up:`, err);
+                          cleanupPeerConnection(userId);
+                        }
+                      }, 5000);
+                      
+                      return; // Exit early since we're trying ICE restart
+                    }
+                  } catch (err) {
+                    console.warn(`ICE restart not supported or failed:`, err);
+                  }
+                  
+                  // If ICE restart isn't supported or failed, clean up and recreate
                   cleanupPeerConnection(userId);
                   
                   // Try to create a new one with a slight delay
@@ -2025,10 +2085,25 @@ console.log("white");
         setShowOutput(true);
         setTimeout(() => setShowOutput(false), 3000);
         
+        // Check the current room call status to ensure we're in sync with the server
+        socketRef.current.emit("checkRoomCallStatus", { roomId });
+        
         // Re-establish video connection if we were in a call
-        if (localStream && roomsWithActiveCalls.has(roomId)) {
+        if (localStream && roomsWithActiveCalls.current.has(roomId)) {
           console.log("Re-establishing video connection after reconnect");
-          socketRef.current.emit("userReadyForCall", { roomId });
+          
+          // Clean up any stale connections first
+          Object.keys(peerConnections.current).forEach(peerId => {
+            cleanupPeerConnection(peerId);
+          });
+          
+          // Wait a moment before reconnecting to allow server state to update
+          setTimeout(() => {
+            socketRef.current.emit("userReadyForCall", { 
+              roomId, 
+              isReconnecting: true 
+            });
+          }, 1000);
         }
       }
       
@@ -2089,11 +2164,25 @@ console.log("white");
       setShowOutput(true);
       setTimeout(() => setShowOutput(false), 3000);
       
+      // Check room call status first to ensure we're in sync
+      socketRef.current.emit("checkRoomCallStatus", { roomId });
+      
       // Re-establish video connections if we were disconnected during a call
       if (window._needsReconnect && localStream) {
         console.log("Re-establishing call connections after reconnect");
+        
+        // Clean up any stale connections first
+        Object.keys(peerConnections.current).forEach(peerId => {
+          if (peerConnections.current[peerId]) {
+            cleanupPeerConnection(peerId);
+          }
+        });
+        
         setTimeout(() => {
-          socketRef.current.emit("userReadyForCall", { roomId });
+          socketRef.current.emit("userReadyForCall", { 
+            roomId, 
+            isReconnecting: true 
+          });
           window._needsReconnect = false;
         }, 1000);
       }
@@ -2217,6 +2306,60 @@ console.log("white");
       setOutput(message)
       setShowOutput(true)
       console.log(message)
+    })
+    
+    // Listen for room call status updates
+    socketRef.current.on("roomCallStatus", ({ hasActiveCall, participantCount, participants }) => {
+      console.log(`Room call status: active=${hasActiveCall}, participants=${participantCount}`)
+      
+      // Update our local tracking of active calls
+      if (hasActiveCall) {
+        roomsWithActiveCalls.current.add(roomId)
+        
+        // If we're not already in the call but there's an active call, notify user
+        if (!localStream && participantCount > 0) {
+          setOutput(`There's an active video call in this room with ${participantCount} participant${participantCount !== 1 ? 's' : ''}. Would you like to join?`)
+          setShowOutput(true)
+          
+          // Auto-open the video tab
+          setActiveTab("video")
+          
+          // Display join call button
+          setIncomingCall({ 
+            from: "room", // Special identifier for room calls
+            userName: "Room Members" 
+          })
+        }
+      } else {
+        roomsWithActiveCalls.current.delete(roomId)
+      }
+    })
+    
+    // Listen for call participants count updates
+    socketRef.current.on("callParticipantsCount", ({ roomId, count }) => {
+      console.log(`Call participants count in room ${roomId}: ${count}`)
+      
+      if (count > 0) {
+        // Update that this room has an active call
+        roomsWithActiveCalls.current.add(roomId)
+      } else {
+        // No more participants, call is over
+        roomsWithActiveCalls.current.delete(roomId)
+      }
+    })
+    
+    // Listen for temporary disconnections
+    socketRef.current.on("userTemporarilyDisconnected", ({ userId, userName }) => {
+      console.log(`${userName} (${userId}) temporarily disconnected from call`)
+      
+      // Mark their video with an overlay but don't remove it yet
+      if (remoteStreams[userId]) {
+        // Add a visual indicator that the user is reconnecting
+        // (This would typically update UI state to show "reconnecting" on their video)
+        setOutput(`${userName} disconnected. Waiting for reconnection...`)
+        setShowOutput(true)
+        setTimeout(() => setShowOutput(false), 3000)
+      }
     })
 
     // Listen for code updates from other users

@@ -139,6 +139,17 @@ io.on("connection", (socket) => {
       // Notify the new user that a call is active
       socket.emit("callActiveInRoom", { roomId });
       console.log(`Notifying ${userName} about active call in room ${roomId}`);
+      
+      // Also send the count of active participants for better UX
+      if (activeCallParticipants.has(roomId)) {
+        const participantCount = activeCallParticipants.get(roomId).size;
+        if (participantCount > 0) {
+          socket.emit("callParticipantsCount", { 
+            roomId, 
+            count: participantCount 
+          });
+        }
+      }
     }
 
     // Update session in database
@@ -363,7 +374,7 @@ io.on("connection", (socket) => {
 
   // WebRTC Signaling Events
   // Handle user ready for call
-  socket.on("userReadyForCall", ({ roomId }) => {
+  socket.on("userReadyForCall", ({ roomId, isReconnecting }) => {
     // Track that this room has an active call
     roomsWithActiveCalls.add(roomId);
     
@@ -392,17 +403,19 @@ io.on("connection", (socket) => {
     // Send list of existing call participants to the new user
     if (existingParticipants.length > 0) {
       socket.emit("existingCallParticipants", {
-        participants: existingParticipants
+        participants: existingParticipants,
+        isReconnect: !!isReconnecting
       });
-      console.log(`Sent ${existingParticipants.length} existing participants to ${socket.userName}`);
+      console.log(`Sent ${existingParticipants.length} existing participants to ${socket.userName}${isReconnecting ? " (reconnecting)" : ""}`);
     }
     
     // Notify others about this new participant
     socket.to(roomId).emit("userReadyForCall", {
       userId: socket.id,
       userName: socket.userName,
+      isReconnect: !!isReconnecting
     });
-    console.log(`${socket.userName} is ready for call in room: ${roomId}`);
+    console.log(`${socket.userName} is ready for call in room: ${roomId}${isReconnecting ? " (reconnecting)" : ""}`);
   });
 
   // Handle WebRTC offer
@@ -472,6 +485,12 @@ io.on("connection", (socket) => {
         activeCallParticipants.delete(roomId);
         roomsWithActiveCalls.delete(roomId);
         console.log(`Call ended in room ${roomId} - no participants remaining`);
+      } else {
+        // Notify remaining participants about the updated count
+        io.to(roomId).emit("callParticipantsCount", {
+          roomId, 
+          count: activeCallParticipants.get(roomId).size
+        });
       }
     }
     
@@ -481,6 +500,39 @@ io.on("connection", (socket) => {
       userName: socket.userName,
     });
     console.log(`${socket.userName} left the call in room: ${roomId}`);
+  });
+  
+  // Handle explicit request for room call status (useful after refresh or reconnection)
+  socket.on("checkRoomCallStatus", ({ roomId }) => {
+    const hasActiveCall = roomsWithActiveCalls.has(roomId);
+    let participantCount = 0;
+    let participants = [];
+    
+    if (hasActiveCall && activeCallParticipants.has(roomId)) {
+      participantCount = activeCallParticipants.get(roomId).size;
+      
+      // Get participant details
+      activeCallParticipants.get(roomId).forEach(participantId => {
+        if (participantId !== socket.id) {
+          const user = getUserFromRoom(roomId, participantId);
+          if (user) {
+            participants.push({
+              userId: participantId,
+              userName: user.name
+            });
+          }
+        }
+      });
+    }
+    
+    socket.emit("roomCallStatus", {
+      roomId,
+      hasActiveCall,
+      participantCount,
+      participants
+    });
+    
+    console.log(`Sent room call status to ${socket.userName}: active=${hasActiveCall}, participants=${participantCount}`);
   });
 
   // Request current code state when joining
@@ -533,20 +585,46 @@ io.on("connection", (socket) => {
     // Clean up WebRTC call participants
     if (socket.currentRoom) {
       if (activeCallParticipants.has(socket.currentRoom)) {
-        // Remove this user from active call participants
-        activeCallParticipants.get(socket.currentRoom).delete(socket.id);
+        // Store user info before removing
+        const isCallParticipant = activeCallParticipants.get(socket.currentRoom).has(socket.id);
+        const userName = socket.userName || "A user";
         
-        // Notify others that this user left the call
-        socket.to(socket.currentRoom).emit("userLeftCall", {
-          userId: socket.id,
-          userName: socket.userName,
-        });
-        
-        // If no participants left in call, clean up
-        if (activeCallParticipants.get(socket.currentRoom).size === 0) {
-          activeCallParticipants.delete(socket.currentRoom);
-          roomsWithActiveCalls.delete(socket.currentRoom);
-          console.log(`Call ended in room ${socket.currentRoom} - all participants disconnected`);
+        if (isCallParticipant) {
+          // Don't immediately remove the user - give them a chance to reconnect
+          // We'll set a timeout to remove them if they don't reconnect in 30 seconds
+          setTimeout(() => {
+            // After timeout, check if this socket is still disconnected (not replaced by a new one)
+            if (activeCallParticipants.has(socket.currentRoom) && 
+                activeCallParticipants.get(socket.currentRoom).has(socket.id)) {
+                
+              // Now remove them as they didn't reconnect in time
+              activeCallParticipants.get(socket.currentRoom).delete(socket.id);
+              
+              // Notify others that this user left the call for good
+              io.to(socket.currentRoom).emit("userLeftCall", {
+                userId: socket.id,
+                userName,
+                reason: "timeout"
+              });
+              
+              console.log(`${userName} removed from call in room ${socket.currentRoom} after reconnect timeout`);
+              
+              // If no participants left in call, clean up
+              if (activeCallParticipants.get(socket.currentRoom).size === 0) {
+                activeCallParticipants.delete(socket.currentRoom);
+                roomsWithActiveCalls.delete(socket.currentRoom);
+                console.log(`Call ended in room ${socket.currentRoom} - all participants disconnected`);
+              }
+            }
+          }, 30000); // 30 second timeout
+          
+          // For immediate UI feedback, emit a temporary disconnect event
+          socket.to(socket.currentRoom).emit("userTemporarilyDisconnected", {
+            userId: socket.id,
+            userName,
+          });
+          
+          console.log(`${userName} temporarily disconnected from call in room ${socket.currentRoom}`);
         }
       }
     }

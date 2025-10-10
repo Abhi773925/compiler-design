@@ -2518,11 +2518,7 @@ console.log("white");
       })
     })
 
-    // Store pending ICE candidates if we receive them before creating peer connection
-    const pendingIceCandidates = useRef({});
-    
-    // Track rooms with active calls for reconnection purposes
-    const roomsWithActiveCalls = useRef(new Set());
+    // Use the pendingIceCandidates and roomsWithActiveCalls refs defined at the component level
     
     // WebRTC Signaling Events with enhanced reliability
     // Handle user ready for call (incoming call notification)

@@ -270,8 +270,25 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           if (fileTabsRef.current) {
             try {
               const currentView = fileTabsRef.current.getCurrentView();
+              // Always refresh files in background, but only show notification in saved view
+              fileTabsRef.current.refreshFiles();
+              
+              // If user is actively looking at saved files, show a brief notification when new files appear
               if (currentView === 'saved') {
-                fileTabsRef.current.refreshFiles();
+                const currentFiles = fileTabsRef.current.getSavedFilesCount ? 
+                  fileTabsRef.current.getSavedFilesCount() : 0;
+                
+                // Check after refresh if there are new files
+                setTimeout(() => {
+                  const newCount = fileTabsRef.current.getSavedFilesCount ? 
+                    fileTabsRef.current.getSavedFilesCount() : 0;
+                  
+                  if (newCount > currentFiles) {
+                    setOutput(`${newCount - currentFiles} new file(s) found in your saved files!`);
+                    setShowOutput(true);
+                    setTimeout(() => setShowOutput(false), 3000);
+                  }
+                }, 1000);
               }
             } catch (e) {
               console.warn('Could not refresh FilesTab:', e);
@@ -3797,10 +3814,15 @@ console.log("white");
             // Refresh the saved files list
             fetchSavedFiles();
             
-            // Update the FilesTab to show the saved files section
+            // Update the FilesTab to show the saved files section and actively
+            // direct user's attention to the saved files tab
             if (fileTabsRef.current && typeof fileTabsRef.current.showSavedFiles === 'function') {
               setTimeout(() => {
                 fileTabsRef.current.showSavedFiles();
+                // Show a notification that explicitly tells the user where to find their saved files
+                setOutput(`File "${fileData.name}" has been saved! Check the "Saved Files" tab to see all your files.`);
+                setShowOutput(true);
+                setTimeout(() => setShowOutput(false), 5000);
               }, 1000);
             }
           }

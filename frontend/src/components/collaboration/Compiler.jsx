@@ -11,6 +11,8 @@ import { Tldraw } from "tldraw"
 import "tldraw/tldraw.css"
 import GitHubIntegration from "../github/GitHubIntegration"
 import GitHubSaveModal from "../github/GitHubSaveModal"
+import FilesTab from "./FilesTab"
+import { saveFile, getUserFiles, getFileById } from "../../services/fileService"
 
 const Compiler = ({ roomId, userName }) => {
   const { theme: appTheme, toggleTheme } = useTheme()
@@ -48,6 +50,105 @@ const Compiler = ({ roomId, userName }) => {
   // Shared files state
   const [activeFileId, setActiveFileId] = useState('main.js')
   const [files, setFiles] = useState({}) // {fileId: { name, content }}
+  const [savedFiles, setSavedFiles] = useState([]) // Saved files from database
+  
+  // Function to fetch saved files from database
+  const fetchSavedFiles = async () => {
+    if (user && user.id) {
+      try {
+        const files = await getUserFiles();
+        setSavedFiles(files);
+        console.log('Fetched saved files:', files);
+      } catch (error) {
+        console.error('Error fetching saved files:', error);
+      }
+    }
+  };
+  
+  // Function to load a saved file from the database
+  const loadSavedFile = async (fileId) => {
+    try {
+      setOutput(`Loading file from database...`);
+      setShowOutput(true);
+      
+      const file = await getFileById(fileId);
+      
+      if (!file || !file.content) {
+        setOutput('Could not load the file. Try again later.');
+        return;
+      }
+      
+      // Set the editor language based on file extension
+      const fileExtension = file.name.split('.').pop().toLowerCase();
+      const extensionToLanguage = {
+        js: 'javascript',
+        py: 'python',
+        java: 'java',
+        cpp: 'cpp',
+        c: 'c',
+        cs: 'csharp',
+        ts: 'typescript',
+        go: 'go',
+        rs: 'rust',
+        php: 'php',
+        rb: 'ruby',
+        kt: 'kotlin',
+        swift: 'swift',
+        r: 'r',
+        sql: 'sql',
+        html: 'html',
+        css: 'css',
+        md: 'markdown',
+        json: 'json',
+      };
+      
+      const detectedLanguage = extensionToLanguage[fileExtension] || 'text';
+      
+      // Create a file entry
+      const localFileId = `db-${file._id}-${Date.now()}`;
+      
+      // Add to files state
+      setFiles(prev => ({ 
+        ...prev, 
+        [localFileId]: { 
+          name: file.name, 
+          content: file.content,
+          source: file.source,
+          dbId: file._id
+        } 
+      }));
+      
+      // Set as active file
+      setActiveFileId(localFileId);
+      
+      // Update editor content
+      if (monacoRef.current) {
+        isRemoteChange.current = true;
+        monacoRef.current.setValue(file.content);
+        setCode(file.content);
+      }
+      
+      // Update language
+      if (detectedLanguage) {
+        setLanguage(detectedLanguage);
+      }
+      
+      setOutput(`File "${file.name}" loaded successfully.`);
+      setShowOutput(true);
+      
+      return file;
+    } catch (error) {
+      console.error('Error loading saved file:', error);
+      setOutput(`Error loading file: ${error.message}`);
+      setShowOutput(true);
+      return null;
+    }
+  };
+  
+  // Fetch saved files when user changes
+  useEffect(() => {
+    fetchSavedFiles();
+  }, [user]);
   const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null) // For auto-scrolling chat
 
@@ -3090,10 +3191,40 @@ console.log("white");
   }, [roomId])
 
   // Upload local file and share with room
+  // Save file to database
+  const saveFileToDatabase = async (fileData) => {
+    if (!user || !user.id) {
+      console.log('User not logged in. File will not be saved to database.');
+      return null;
+    }
+    
+    try {
+      const result = await saveFile(fileData);
+      console.log('File saved to database:', result);
+      
+      // Update saved files list
+      setSavedFiles(prev => {
+        const exists = prev.some(f => f._id === result.file._id);
+        if (exists) {
+          return prev.map(f => f._id === result.file._id ? result.file : f);
+        } else {
+          return [...prev, result.file];
+        }
+      });
+      
+      return result.file;
+    } catch (error) {
+      console.error('Error saving file to database:', error);
+      setOutput(`Error saving file: ${error.message}`);
+      setShowOutput(true);
+      return null;
+    }
+  };
+  
   const handleUploadFile = async (event) => {
     try {
       const file = event?.target?.files?.[0]
-      if (!file || !socketRef.current || !roomIdRef.current) return
+      if (!file) return
       
       setOutput(`Reading file ${file.name}...`)
       setShowOutput(true)
@@ -3104,6 +3235,24 @@ console.log("white");
       // Update local state
       setFiles(prev => ({ ...prev, [fileId]: { name: file.name, content: text } }))
       setActiveFileId(fileId)
+      
+      // Also save to database if user is logged in
+      if (user && user.id) {
+        try {
+          await saveFileToDatabase({
+            name: file.name,
+            content: text,
+            source: 'local-upload',
+            metadata: { 
+              size: file.size,
+              type: file.type,
+              lastModified: new Date(file.lastModified).toISOString()
+            }
+          });
+        } catch (saveError) {
+          console.error('Error saving file to database:', saveError);
+        }
+      }
       
       // Share with other users in room via socket
       socketRef.current.emit('uploadFile', {
@@ -3296,6 +3445,37 @@ console.log("white");
     
     // Update file name/path display
     setActiveFileId(fileData.name);
+    
+    // Create a file entry for the local state
+    const newFileId = `${fileData.name}-${Date.now()}`;
+    setFiles(prev => ({ ...prev, [newFileId]: { 
+      name: fileData.name, 
+      content: fileData.content 
+    }}));
+    
+    // Save to database if user is logged in
+    if (user && user.id) {
+      saveFileToDatabase({
+        name: fileData.name,
+        content: fileData.content,
+        source: 'github',
+        metadata: {
+          path: fileData.path,
+          repo: fileData.repo,
+          sha: fileData.sha,
+          size: fileData.size,
+          lastModified: new Date().toISOString()
+        }
+      }).then(savedFile => {
+        if (savedFile) {
+          console.log('GitHub file saved to database:', savedFile);
+          setOutput(`File "${fileData.name}" loaded from GitHub and saved to your files.`);
+          setShowOutput(true);
+        }
+      }).catch(error => {
+        console.error('Error saving GitHub file to database:', error);
+      });
+    }
     
     // Notify collaborators if in a room
     if (roomId && socketRef.current) {
@@ -3588,102 +3768,15 @@ console.log("white");
     
                 {/* Files Tab Content */}
                 {activeTab === "files" && (
-                  <div className="space-y-3">
-                    {/* File Upload Section */}
-                    <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Upload New File</h3>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-grow relative">
-                          <input 
-                            ref={fileInputRef} 
-                            type="file" 
-                            onChange={handleUploadFile} 
-                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" 
-                          />
-                          <button className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-400 rounded text-sm transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                              <polyline points="17 8 12 3 7 8"></polyline>
-                              <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                            Choose a file...
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Upload code files to share with others in this session
-                      </p>
-                    </div>
-                    
-                    {/* Active Files Section */}
-                    <div className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Available Files</h3>
-                      {Object.entries(files).length > 0 ? (
-                        <div className="space-y-2">
-                          {Object.entries(files).map(([fid, f]) => {
-                            // Determine file type icon based on file extension
-                            const ext = (f.name?.split('.').pop() || '').toLowerCase()
-                            const isCodeFile = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'cs', 'go', 'rb', 'php', 'html', 'css'].includes(ext)
-                            
-                            return (
-                              <div 
-                                key={fid}
-                                onClick={() => {
-                                  setActiveFileId(fid)
-                                  if (socketRef.current && roomId) {
-                                    socketRef.current.emit('setActiveFile', { roomId, fileId: fid })
-                                    socketRef.current.emit('requestFile', { roomId, fileId: fid })
-                                  }
-                                }}
-                                className={`p-2 rounded-lg cursor-pointer border transition-all ${
-                                  fid === activeFileId 
-                                    ? 'bg-orange-100 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700' 
-                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-700'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {/* File icon */}
-                                  {isCodeFile ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-500 dark:text-orange-400">
-                                      <polyline points="16 18 22 12 16 6"></polyline>
-                                      <polyline points="8 6 2 12 8 18"></polyline>
-                                    </svg>
-                                  ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 dark:text-gray-400">
-                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                      <polyline points="14 2 14 8 20 8"></polyline>
-                                    </svg>
-                                  )}
-                                  
-                                  {/* File name */}
-                                  <span className={`text-sm ${fid === activeFileId ? 'font-medium text-orange-700 dark:text-orange-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                                    {f?.name || fid}
-                                  </span>
-                                  
-                                  {/* Active indicator */}
-                                  {fid === activeFileId && (
-                                    <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full ml-auto">
-                                      Active
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-6 text-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 mb-2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                          </svg>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">No files uploaded yet</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Upload a file to get started</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <FilesTab 
+                    activeFileId={activeFileId}
+                    files={files}
+                    setActiveFileId={setActiveFileId}
+                    onLoadFile={loadSavedFile}
+                    onOpenGitHubModal={openGitHubModal}
+                    savedFiles={savedFiles}
+                    roomId={roomId}
+                  />
                 )}
 
                 {/* Chat Tab Content */}

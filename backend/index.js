@@ -15,6 +15,7 @@ const projectRoutes = require("./routes/projects");
 const problemRoutes = require("./routes/problems");
 const sessionRoutes = require("./routes/sessions");
 const githubRoutes = require("./routes/github");
+const filesRoutes = require("./routes/files");
 const Session = require("./models/Session");
 
 const app = express();
@@ -71,6 +72,7 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/problems", problemRoutes);
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/github", githubRoutes);
+app.use("/api/files", filesRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

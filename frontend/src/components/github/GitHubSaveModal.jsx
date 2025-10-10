@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { isGithubAuthenticated, getGithubUser, getRepositories, commitFile, createRepository } from '../../services/githubService';
+import { useTheme } from '../../context/ThemeContext';
 
 const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
+  const { theme } = useTheme();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(false);

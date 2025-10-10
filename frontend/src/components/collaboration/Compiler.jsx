@@ -259,17 +259,20 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     if (!isUserLoggedIn()) return null
 
     const saveAttempt = async () => {
+      // Map 'direct' source to 'editor' for backend compatibility
+      const validSource = source === "direct" ? "editor" : (source || "editor")
+      
       const metadata = {
         type: file.type || "text/plain",
         lastModified: new Date().toISOString(),
-        source: source,
+        originalSource: source, // Keep track of original source
         createdBy: getUserId(),
       }
 
       return await saveFileToDatabase({
         name: file.name,
         content: file.content,
-        source: source,
+        source: validSource,
         metadata: metadata,
       })
     }
@@ -312,12 +315,26 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         const file = fileData
         const source = "direct"
 
+        console.log("📥 Loading direct file:", {
+          name: file.name,
+          hasContent: !!file.content,
+          contentLength: file.content?.length,
+          source: source
+        })
+
+        // Validate file has required fields
+        if (!file.name || !file.content) {
+          throw new Error("File must have name and content")
+        }
+
         // Try saving to database
         let savedFile = null
         if (isUserLoggedIn()) {
           try {
+            console.log("💾 Attempting to save direct file to database...")
             savedFile = await saveFileWithRetry(file, source)
             if (savedFile) {
+              console.log("✅ Direct file saved successfully:", savedFile._id)
               file.dbId = savedFile._id
               // Update saved files list
               setSavedFiles((prev) => {
@@ -325,11 +342,15 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 return [...currentFiles, savedFile]
               })
               setOutput(`File "${file.name}" saved to your account!`)
+            } else {
+              console.log("⚠️ Save returned null")
             }
           } catch (error) {
-            console.error("Save failed:", error)
+            console.error("❌ Save failed:", error)
             setOutput("Using local storage as backup...")
           }
+        } else {
+          console.log("⚠️ User not logged in, skipping database save")
         }
 
         // Always store locally

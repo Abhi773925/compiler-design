@@ -86,6 +86,20 @@ export const saveFile = async (fileData) => {
   if (!token) {
     throw new Error('Not authenticated');
   }
+
+  // Validate fileData before sending
+  if (!fileData.name || !fileData.content) {
+    console.error('❌ Invalid fileData:', fileData);
+    throw new Error('File name and content are required');
+  }
+
+  console.log('📤 Sending file to backend:', {
+    name: fileData.name,
+    contentLength: fileData.content.length,
+    source: fileData.source,
+    hasMetadata: !!fileData.metadata,
+    fileId: fileData.fileId
+  });
   
   const response = await fetch(`${getApiBaseUrl()}/api/files`, {
     method: 'POST',
@@ -99,9 +113,11 @@ export const saveFile = async (fileData) => {
   const data = await response.json();
   
   if (!response.ok) {
+    console.error('❌ Backend error:', data);
     throw new Error(data.message || 'Failed to save file');
   }
   
+  console.log('✅ Backend response:', data);
   return data;
 };
 

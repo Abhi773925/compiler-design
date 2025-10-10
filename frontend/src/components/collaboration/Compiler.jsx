@@ -58,6 +58,8 @@ const Compiler = ({ roomId, userName }) => {
 
   const loaderAddedRef = React.useRef(false)
   const editorCreatedRef = React.useRef(false)
+  const pendingIceCandidates = useRef({})
+  const roomsWithActiveCalls = useRef(new Set())
 
   // Update refs when values change
   useEffect(() => {

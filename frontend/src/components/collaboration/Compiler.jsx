@@ -132,6 +132,36 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         // Use provided fileId or create one
         const localFileId = fileData.fileId || `db-${file._id || 'custom'}-${Date.now()}`;
         
+        // Check if we should save this to the database (for custom files)
+        if (fileData.saveToDb && user && user.id) {
+          // Prepare file data for saving to database
+          const dbFileData = {
+            name: file.name,
+            content: file.content,
+            source: file.source || 'custom',
+            metadata: {
+              ...(file.metadata || {}),
+              createdBy: user.id,
+              language: detectedLanguage
+            }
+          };
+          
+          console.log('Saving custom file to database:', dbFileData);
+          // Save to database
+          const savedFile = await saveFileToDatabase(dbFileData);
+          
+          if (savedFile && savedFile._id) {
+            console.log('Custom file saved to database with ID:', savedFile._id);
+            // Update with database ID
+            file._id = savedFile._id;
+            file.dbId = savedFile._id;
+            
+            // Show success message
+            setOutput(`Custom file "${file.name}" created and saved to your account!`);
+            setShowOutput(true);
+          }
+        }
+        
         // Add to files state
         setFiles(prev => ({ 
           ...prev, 

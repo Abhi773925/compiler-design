@@ -18,6 +18,9 @@ const FilesTab = forwardRef(({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [view, setView] = useState('session'); // 'session', 'saved', 'github'
+  const [showCreateFileModal, setShowCreateFileModal] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileContent, setNewFileContent] = useState('');
 
   // Fetch saved files from the backend
   useEffect(() => {
@@ -314,6 +317,91 @@ const FilesTab = forwardRef(({
     </div>
   );
 
+  // Handle creating a new file
+  const handleCreateNewFile = () => {
+    setNewFileName('');
+    setNewFileContent('// Write your code here...');
+    setShowCreateFileModal(true);
+  };
+  
+  // Handle saving the new custom file
+  const handleSaveNewFile = async () => {
+    if (!user) {
+      setError('Please log in to save files');
+      return;
+    }
+    
+    if (!newFileName.trim()) {
+      setError('Please enter a file name');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Add file extension if not present
+      let fileName = newFileName.trim();
+      if (!fileName.includes('.')) {
+        fileName += '.js';  // Default to .js extension
+      }
+      
+      // Create file data object
+      const fileData = {
+        name: fileName,
+        content: newFileContent,
+        source: 'custom',  // Mark as custom file
+        createdAt: new Date().toISOString()
+      };
+      
+      // First create in current session
+      const newFileId = `custom-${Date.now()}`;
+      
+      // Add to current session files
+      const newFile = {
+        name: fileName,
+        content: newFileContent,
+        source: 'custom'
+      };
+      
+      // Load into the editor
+      onLoadFile({
+        fileId: newFileId,
+        ...newFile
+      });
+      
+      // Save to database if user is logged in
+      if (user) {
+        try {
+          console.log('Saving custom file to database:', fileData);
+          // Use the onLoadFile function which will handle saving to DB
+          onLoadFile({
+            fileId: newFileId,
+            name: fileName,
+            content: newFileContent,
+            source: 'custom',
+            saveToDb: true  // Flag to indicate this should be saved
+          });
+          
+          // Refresh saved files list
+          setTimeout(() => {
+            loadSavedFiles();
+          }, 500);
+        } catch (err) {
+          console.error('Error saving custom file:', err);
+          setError('Failed to save file to your account');
+        }
+      }
+      
+      // Close modal
+      setShowCreateFileModal(false);
+    } catch (err) {
+      console.error('Error creating new file:', err);
+      setError('Failed to create file');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Get saved files count
   const getSavedFilesCount = () => {
     return savedFiles.length;
@@ -348,8 +436,108 @@ const FilesTab = forwardRef(({
     getSavedFilesCount
   }));
 
+  // Create File Modal
+  const renderCreateFileModal = () => {
+    if (!showCreateFileModal) return null;
+    
+    return (
+      <>
+        {/* Modal Backdrop */}
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+          onClick={() => setShowCreateFileModal(false)}
+        />
+        
+        {/* Modal Content */}
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div 
+            className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create New File</h3>
+              <button 
+                onClick={() => setShowCreateFileModal(false)} 
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {error && (
+              <div className="mb-4 p-2 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded-md">
+                {error}
+              </div>
+            )}
+            
+            {/* File Name Input */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                File Name
+              </label>
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder="Enter file name (e.g. myCode.js)"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                File extension will be added automatically if not specified
+              </p>
+            </div>
+            
+            {/* File Content Input */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Initial Content
+              </label>
+              <textarea
+                value={newFileContent}
+                onChange={(e) => setNewFileContent(e.target.value)}
+                rows={8}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono text-sm"
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowCreateFileModal(false)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNewFile}
+                disabled={loading}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md disabled:opacity-50 flex items-center"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creating...
+                  </>
+                ) : (
+                  'Create File'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className="p-2">
+      {/* Create File Modal */}
+      {renderCreateFileModal()}
+      
       {/* Tab navigation */}
       <div className="flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden mb-2">
         <button
@@ -390,6 +578,17 @@ const FilesTab = forwardRef(({
         </h3>
         
         <div className="flex space-x-1">
+          {/* Create New File button - show in both views */}
+          <button
+            onClick={() => handleCreateNewFile()}
+            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
+            title="Create New File"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        
           {view === 'session' && (
             <button
               onClick={onOpenGitHubModal}

@@ -1459,15 +1459,11 @@ const Compiler = ({ roomId, userName }) => {
 
   // Start video call with optimized quality settings
   const startVideo = async () => {
-    // Prefer Jitsi-based call for consistency
-    try {
-      if (!jitsiActiveRef.current) {
-        await startJitsiCall()
-        return
-      }
-    } catch (e) {
-      console.warn('Jitsi start failed, falling back to WebRTC:', e)
-    }
+    // Use Jitsi by default for consistent multi-party calls
+    await startJitsiCall()
+    return
+    // Fallback disabled intentionally; uncomment to allow native fallback
+    /*
     try {
       // Request permissions with enhanced quality settings
       const constraints = {
@@ -1627,6 +1623,7 @@ const Compiler = ({ roomId, userName }) => {
       
       setShowOutput(true);
     }
+    */
   }
   // Jitsi Meet embedding for robust SFU-based calls
   const loadJitsiScript = () => new Promise((resolve, reject) => {
@@ -4283,7 +4280,14 @@ console.log("white");
                           <div className="grid grid-cols-3 gap-3 mb-2">
                             {/* Toggle Audio */}
                             <button
-                              onClick={toggleAudio}
+                              onClick={() => {
+                                if (jitsiActiveRef.current && jitsiApiRef.current) {
+                                  jitsiApiRef.current.executeCommand('toggleAudio')
+                                  setIsAudioOn(prev => !prev)
+                                } else {
+                                  toggleAudio()
+                                }
+                              }}
                               className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg font-medium transition-all duration-200 ${
                                 isAudioOn
                                   ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -4325,7 +4329,14 @@ console.log("white");
 
                             {/* Toggle Video */}
                             <button
-                              onClick={toggleVideo}
+                              onClick={() => {
+                                if (jitsiActiveRef.current && jitsiApiRef.current) {
+                                  jitsiApiRef.current.executeCommand('toggleVideo')
+                                  setIsVideoOn(prev => !prev)
+                                } else {
+                                  toggleVideo()
+                                }
+                              }}
                               className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg font-medium transition-all duration-200 ${
                                 isVideoOn
                                   ? "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -4362,7 +4373,14 @@ console.log("white");
 
                             {/* Screen Share */}
                             <button
-                              onClick={screenStream ? stopScreenShare : startScreenShare}
+                              onClick={() => {
+                                if (jitsiActiveRef.current && jitsiApiRef.current) {
+                                  jitsiApiRef.current.executeCommand('toggleShareScreen')
+                                } else {
+                                  if (screenStream) stopScreenShare()
+                                  else startScreenShare()
+                                }
+                              }}
                               className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg font-medium transition-all duration-200 
                               ${screenStream 
                                 ? "bg-green-600 text-white hover:bg-green-700" 

@@ -356,18 +356,14 @@ const FilesTab = forwardRef(({
   
   // Handle saving the new custom file
   const handleSaveNewFile = async () => {
-    if (!user) {
-      setError('Please log in to save files');
-      return;
-    }
-    
     if (!newFileName.trim()) {
       setError('Please enter a file name');
       return;
     }
-    
+
     try {
       setLoading(true);
+
       // Use exact filename provided; if no extension, default to .js
       let fileName = newFileName.trim();
       if (!fileName.includes('.')) {
@@ -375,6 +371,29 @@ const FilesTab = forwardRef(({
       }
 
       const fileId = `custom-${Date.now()}`;
+
+      // If we're in the session view, add to the current session only (no login required)
+      if (view === 'session') {
+        onLoadFile({
+          fileId,
+          name: fileName,
+          content: newFileContent,
+          source: 'custom'
+        });
+
+        // Close modal and clear any error
+        setShowCreateFileModal(false);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      // Otherwise (saved view) we save to DB and require user
+      if (!user) {
+        setError('Please log in to save files to your account');
+        setLoading(false);
+        return;
+      }
 
       // Load into editor and request DB save in a single call
       onLoadFile({
@@ -517,7 +536,11 @@ const FilesTab = forwardRef(({
             
             {/* Minimal: no large content input here. Editor will open for editing after creation. */}
             <div className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-              The file's content will be editable in the editor after creation.
+              {view === 'session' ? (
+                <>This will be added to the current session (no sign-in required). You can edit it in the editor.</>
+              ) : (
+                <>This will be saved to your account and shown under <strong>Saved Files</strong>. You must be signed in.</>
+              )}
             </div>
             
             {/* Action Buttons */}

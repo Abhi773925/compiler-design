@@ -287,12 +287,74 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     }
   };
   
-  // Simple file change handler
-  const handleFileChange = (fileId) => {
-    // Only change if the file exists and we're not in a remote change
+  // Save current file content to database
+  const saveCurrentFile = async () => {
+    if (!monacoRef.current || !activeFileId || !files[activeFileId]) return;
+    
+    try {
+      const currentContent = monacoRef.current.getValue();
+      const currentFile = files[activeFileId];
+      
+      // Prepare file data for saving
+      const fileData = {
+        name: currentFile.name,
+        content: currentContent,
+        source: currentFile.source || 'editor',
+        metadata: {
+          ...(currentFile.metadata || {}),
+          lastModified: new Date().toISOString(),
+          language: language
+        }
+      };
+
+      // Save to database
+      const savedFile = await saveFileToDatabase(fileData);
+      console.log('File saved:', currentFile.name);
+      
+      // Update files state with new database ID
+      if (savedFile && savedFile._id) {
+        setFiles(prev => ({
+          ...prev,
+          [activeFileId]: {
+            ...prev[activeFileId],
+            dbId: savedFile._id,
+            lastSaved: new Date().toISOString()
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error saving file:', error);
+      setOutput(`Error saving file: ${error.message}`);
+      setShowOutput(true);
+    }
+  };
+
+  // Enhanced file change handler with auto-save
+  const handleFileChange = async (fileId) => {
+    // Only proceed if the file exists and we're not in a remote change
     if (files[fileId] && !isRemoteChange.current) {
-      console.log('Switching to file:', files[fileId].name);
-      setActiveFileId(fileId);
+      try {
+        // Save current file before switching
+        await saveCurrentFile();
+        
+        // Switch to new file
+        console.log('Switching to file:', files[fileId].name);
+        setActiveFileId(fileId);
+        
+        // If the file has content in database, load it
+        if (files[fileId].dbId) {
+          const freshContent = await getFileById(files[fileId].dbId);
+          if (freshContent && freshContent.content) {
+            // Update the editor with fresh content
+            monacoRef.current?.setValue(freshContent.content);
+            setCode(freshContent.content);
+          }
+        }
+      } catch (error) {
+        console.error('Error during file switch:', error);
+        setOutput(`Error switching files: ${error.message}`);
+        setShowOutput(true);
+      }
     }
   };
 
@@ -358,6 +420,14 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   useEffect(() => {
     roomIdRef.current = roomId
   }, [roomId])
+
+  // Auto-save effect when code changes
+  useEffect(() => {
+    if (code && !isRemoteChange.current) {
+      const timer = setTimeout(saveCurrentFile, 2000); // Auto-save 2 seconds after last change
+      return () => clearTimeout(timer);
+    }
+  }, [code])
   
   // GitHub file recovery mechanism
   useEffect(() => {

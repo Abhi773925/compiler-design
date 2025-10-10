@@ -183,7 +183,7 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           whileHover={{ scale: 1.01 }}
-          className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200"
+          className="p-4 bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-800 transition-all duration-300"
           onClick={() => handleSelectRepo(repo)}
         >
           <div className="flex items-center">
@@ -262,7 +262,7 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
   );
 
   return (
-    <div className="bg-white/50 dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl border border-gray-200 dark:border-gray-700 w-full max-w-2xl shadow-lg backdrop-blur-sm">
+    <div className="bg-white/50 dark:bg-black/50 text-gray-900 dark:text-white p-6 rounded-xl border border-gray-200 dark:border-gray-800 w-full max-w-2xl shadow-lg backdrop-blur-sm">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
           <svg 
@@ -314,7 +314,7 @@ const GitHubIntegration = ({ onSelectFile, onClose }) => {
         <div>
           {/* User info */}
           {githubUser && (
-            <div className="flex items-center justify-between mb-6 bg-gray-100 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-6 bg-white/50 dark:bg-black/50 backdrop-blur-sm p-3 rounded-lg border border-gray-200 dark:border-gray-800 hover:border-orange-500 dark:hover:border-orange-400 transition-all duration-300">
               <div className="flex items-center">
                 <img 
                   src={githubUser.avatar_url} 

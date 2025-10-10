@@ -198,7 +198,7 @@ const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               whileHover={{ scale: 1.01 }}
-              className="p-3 bg-gray-100 dark:bg-gray-800 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-all duration-200"
+              className="p-3 bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-800 hover:border-orange-500 dark:hover:border-orange-400 transition-all duration-300"
               onClick={() => handleSelectRepo(repo)}
             >
               <div className="flex items-center justify-between">
@@ -230,7 +230,7 @@ const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
             type="text"
             value={newRepoName}
             onChange={(e) => setNewRepoName(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
+            className="w-full bg-white/80 dark:bg-black/50 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
             placeholder="my-awesome-project"
             required
           />
@@ -242,7 +242,7 @@ const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
             type="text"
             value={newRepoDescription}
             onChange={(e) => setNewRepoDescription(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
+            className="w-full bg-white/80 dark:bg-black/50 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
             placeholder="A short description of your repository"
           />
         </div>
@@ -253,7 +253,7 @@ const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
             id="isPrivate"
             checked={isPrivate}
             onChange={(e) => setIsPrivate(e.target.checked)}
-            className="h-4 w-4 text-orange-600 dark:text-orange-400 rounded border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-orange-500 dark:focus:ring-orange-400"
+            className="h-4 w-4 text-orange-600 dark:text-orange-400 rounded border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-black/50 focus:ring-orange-500 dark:focus:ring-orange-400"
           />
           <label htmlFor="isPrivate" className="ml-2 text-sm text-gray-700 dark:text-gray-300">Private repository</label>
         </div>
@@ -276,7 +276,7 @@ const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
             type="text"
             value={commitMessage}
             onChange={(e) => setCommitMessage(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
+            className="w-full bg-white/80 dark:bg-black/50 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
             placeholder={`Add ${filePath}`}
           />
         </div>
@@ -316,7 +316,7 @@ const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
             type="text"
             value={filePath}
             onChange={(e) => setFilePath(e.target.value)}
-            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
+            className="w-full bg-white/80 dark:bg-black/50 backdrop-blur-sm border border-gray-200 dark:border-gray-800 rounded-md py-2 px-3 text-sm focus:ring-orange-500 focus:border-orange-500 dark:focus:ring-orange-400 dark:focus:border-orange-400"
             placeholder={`main.${getDefaultExtension()}`}
             required
           />
@@ -395,7 +395,7 @@ const GitHubSaveModal = ({ onClose, code, language, fileName = null }) => {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700 shadow-lg text-gray-900 dark:text-white"
+        className="bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-800 shadow-lg text-gray-900 dark:text-white"
       >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">

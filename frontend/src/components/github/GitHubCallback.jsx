@@ -51,8 +51,8 @@ const GitHubCallback = () => {
   }, [location, navigate]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-white to-gray-100 dark:from-gray-900 dark:to-gray-800 text-gray-900 dark:text-white p-4">
-      <div className="w-full max-w-md bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-orange-50/50 via-transparent to-transparent dark:from-orange-950/20 dark:via-transparent dark:to-transparent text-gray-900 dark:text-white p-4">
+      <div className="w-full max-w-md bg-white/50 dark:bg-black/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 hover:border-orange-500 dark:hover:border-orange-400 transition-all duration-300">
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold mb-2">GitHub Integration</h1>
           <div className="flex justify-center mb-4">

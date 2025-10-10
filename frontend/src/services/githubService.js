@@ -59,7 +59,7 @@ export const handleGithubCallback = async (code, state) => {
     body: JSON.stringify({ 
       code,
       clientId: 'Ov23likZXqyctlogOjrD',
-      clientSecret: 'b856bc22601b3161a873aab4224fa1147735f717'
+      clientSecret: '33f8826253cb41cdb16802a4eb5971f73144eb28'
     }),
   });
   

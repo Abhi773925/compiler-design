@@ -14,13 +14,16 @@ import GitHubSaveModal from "../github/GitHubSaveModal"
 import FilesTab from "./FilesTab"
 import { saveFile, getUserFiles, getFileById } from "../../services/fileService"
 
-const Compiler = ({ roomId, userName }) => {
+const Compiler = ({ roomId, userName: propUserName }) => {
   const { theme: appTheme, toggleTheme } = useTheme()
   const { user } = useAuth() // Get logged in user
   const navigate = useNavigate() // For navigation
   const [language, setLanguage] = useState("javascript")
   const [code, setCode] = useState("")
   const [theme, setTheme] = useState("vs-dark")
+  
+  // Always use the authenticated user's name if available, otherwise use the prop
+  const userName = user?.name || propUserName || (user?.email ? user.email.split('@')[0] : null)
   const [output, setOutput] = useState("")
   const [customInput, setCustomInput] = useState("")
   const [isRunning, setIsRunning] = useState(false)
@@ -703,7 +706,7 @@ const Compiler = ({ roomId, userName }) => {
           mime: `text/${langMap[extension] || 'plain'}`,
           size: cachedFile.content.length,
           uploadedBy: socketRef.current.id,
-          uploaderName: user?.name || userName || "Anonymous",
+          uploaderName: userName || "Anonymous",
           source: "cached",
           metadata: {
             originalSha: fileSha,
@@ -848,7 +851,7 @@ const Compiler = ({ roomId, userName }) => {
           mime: `text/${langMap[extension] || 'plain'}`,
           size: validatedContent.length,
           uploadedBy: socketRef.current.id,
-          uploaderName: user?.name || userName || "Anonymous",
+          uploaderName: userName || "Anonymous",
           source: "github",
           metadata: {
             repo: fileData.repo,
@@ -1995,7 +1998,7 @@ const Compiler = ({ roomId, userName }) => {
     const messageData = {
       id: Date.now(),
       userId: socketRef.current.id,
-      userName: user?.name || userName || "Anonymous",
+      userName: userName || "Anonymous",
       message: newMessage.trim(),
       timestamp: new Date().toISOString(),
     }
@@ -2149,7 +2152,7 @@ console.log("white");
       // When reconnected after disconnect, need to rejoin the room
       socketRef.current.emit("joinRoom", {
         roomId,
-        userName: user?.name || userName || "Anonymous",
+        userName: userName || "Anonymous",
         userId: user?._id || user?.id || null,
       });
       
@@ -2394,7 +2397,7 @@ console.log("white");
     // Join the room with userId
     socketRef.current.emit("joinRoom", {
       roomId,
-      userName:user?.name || userName || "Anonymous",
+      userName: userName || "Anonymous",
       userId: user?._id || user?.id || null,
     })
 
@@ -2972,7 +2975,7 @@ console.log("white");
           answer,
           to: from,
           roomId,
-          userName: user?.name || userName || "Anonymous"
+          userName: userName || "Anonymous"
         });
         
         console.log(`Answer sent to ${from}`);
@@ -3488,7 +3491,7 @@ console.log("white");
           size: file.size,
           content: text,
           uploadedBy: user?._id || user?.id || socketRef.current.id,
-          uploaderName: user?.name || userName || "Anonymous",
+          uploaderName: userName || "Anonymous",
           source: "local-upload",
           metadata: {
             type: file.type,
@@ -3516,7 +3519,7 @@ console.log("white");
             mime: file.type,
             size: file.size,
             uploadedBy: user?._id || user?.id || socketRef.current?.id,
-            uploaderName: user?.name || userName || "Anonymous"
+            uploaderName: userName || "Anonymous"
           }),
         }).catch(err => {
           console.warn('Could not save file to session:', err);
@@ -3818,7 +3821,7 @@ console.log("white");
           mime: `text/${detectedLanguage || 'plain'}`,
           size: validatedContent.length,
           uploadedBy: user?._id || user?.id || socketRef.current.id,
-          uploaderName: user?.name || userName || "Anonymous",
+          uploaderName: userName || "Anonymous",
           source: "github",
           metadata: {
             repo: fileData.repo,

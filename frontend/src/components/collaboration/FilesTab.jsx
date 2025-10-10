@@ -37,7 +37,13 @@ const FilesTab = ({
       setSavedFiles(files || []);
     } catch (err) {
       console.error('Error loading saved files:', err);
-      setError('Failed to load saved files. Please try again.');
+      // More specific error message based on the error
+      if (err.message === 'Not authenticated') {
+        setError('Please log in to view your saved files.');
+      } else {
+        setError('Failed to load saved files. Please try again.');
+      }
+      setSavedFiles([]); // Reset saved files on error
     } finally {
       setLoading(false);
     }

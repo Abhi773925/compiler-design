@@ -15,7 +15,7 @@ const getApiBaseUrl = () => {
  * @returns {Promise} Promise resolving to array of files
  */
 export const getUserFiles = async () => {
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('token');
   
   if (!token) {
     throw new Error('Not authenticated');
@@ -43,7 +43,7 @@ export const getUserFiles = async () => {
  * @returns {Promise} Promise resolving to file data
  */
 export const getFileById = async (fileId) => {
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('token');
   
   if (!token) {
     throw new Error('Not authenticated');
@@ -76,7 +76,7 @@ export const getFileById = async (fileId) => {
  * @returns {Promise} Promise resolving to saved file data
  */
 export const saveFile = async (fileData) => {
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('token');
   
   if (!token) {
     throw new Error('Not authenticated');
@@ -106,7 +106,7 @@ export const saveFile = async (fileData) => {
  * @returns {Promise} Promise resolving to deletion status
  */
 export const deleteFile = async (fileId) => {
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('token');
   
   if (!token) {
     throw new Error('Not authenticated');

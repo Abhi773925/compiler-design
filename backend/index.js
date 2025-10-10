@@ -435,7 +435,8 @@ io.on("connection", (socket) => {
       timestamp: new Date().toISOString(),
     };
 
-    io.to(roomId).emit("newMessage", { message: messageData });
+    // Send message only to other users in the room, not back to the sender
+    socket.to(roomId).emit("newMessage", { message: messageData });
 
     // Save message to database
     try {

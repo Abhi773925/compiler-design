@@ -14,6 +14,24 @@ const FilesTab = forwardRef(({
 }, ref) => {
   const fileInputRef = useRef(null);
   const { user } = useAuth();
+  const lastFileChangeRef = useRef(Date.now());
+  
+  // Debounced file selection handler
+  const onFileSelect = (fileId) => {
+    // Prevent rapid changes by enforcing a minimum delay between changes
+    const now = Date.now();
+    const timeSinceLastChange = now - lastFileChangeRef.current;
+    
+    if (timeSinceLastChange < 500) { // 500ms minimum delay
+      return;
+    }
+
+    // Only change if it's a different file and the file exists
+    if (fileId !== activeFileId && files[fileId]) {
+      lastFileChangeRef.current = now;
+      setActiveFileId(fileId);
+    }
+  };
   const [savedFiles, setSavedFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -172,7 +190,7 @@ const FilesTab = forwardRef(({
         Object.entries(files).map(([fileId, file]) => (
           <div
             key={fileId}
-            onClick={() => setActiveFileId(fileId)}
+            onClick={() => onFileSelect(fileId)}
             className={`px-3 py-2 flex items-center justify-between rounded-md cursor-pointer group ${
               activeFileId === fileId
                 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'

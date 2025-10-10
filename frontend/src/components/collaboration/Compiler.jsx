@@ -58,6 +58,8 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   const [activeFileId, setActiveFileId] = useState('main.js')
   const [files, setFiles] = useState({}) // {fileId: { name, content }}
   const [savedFiles, setSavedFiles] = useState([]) // Saved files from database
+  const lastFileChangeRef = useRef(Date.now())
+  const fileChangeTimeoutRef = useRef(null)
   
   // Function to fetch saved files from database
   const fetchSavedFiles = async () => {
@@ -285,6 +287,44 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     }
   };
   
+  // Enhanced file change handler with consistency checks
+  const handleFileChange = (fileId) => {
+    const now = Date.now();
+    const timeSinceLastChange = now - lastFileChangeRef.current;
+    
+    // Prevent rapid changes and ensure minimum delay between switches
+    if (timeSinceLastChange < 500) {
+      console.log('Preventing rapid file switch, waiting for cooldown');
+      return;
+    }
+
+    // Validate file exists before proceeding
+    if (!files[fileId]) {
+      console.warn('Attempted to switch to non-existent file:', fileId);
+      return;
+    }
+
+    // Clear any pending file change to prevent race conditions
+    if (fileChangeTimeoutRef.current) {
+      clearTimeout(fileChangeTimeoutRef.current);
+    }
+
+    // Set a timeout to change the file after a delay with validation
+    fileChangeTimeoutRef.current = setTimeout(() => {
+      // Double check file still exists when timeout executes
+      if (files[fileId]) {
+        // Update timestamp before change to maintain accurate timing
+        lastFileChangeRef.current = Date.now();
+        
+        // Ensure we're not in the middle of another operation
+        if (!isRemoteChange.current) {
+          console.log('Switching to file:', files[fileId].name);
+          setActiveFileId(fileId);
+        }
+      }
+    }, 500);
+  };
+
   // Fetch saved files when user changes or when files are saved
   useEffect(() => {
     if (user && user.id) {

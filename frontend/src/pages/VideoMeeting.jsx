@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import io from "socket.io-client";
 
-const server_url = "https://compiler-design.onrender.compiler-design";
+const server_url = "https://compiler-design.onrender.com";
 var connections = {};
 const peerConfigConnections = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],

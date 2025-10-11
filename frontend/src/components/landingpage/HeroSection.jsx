@@ -118,17 +118,28 @@ const HeroSection = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.7 }}
             >
-              {/* Get Started Button */}
-              <Button
-                size="lg"
-                className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-base font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-                onClick={() => setAuthModalOpen(true)}
-              >
-                Get Started
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+              {/* Conditional First Button - Practice Problem if logged in, Get Started if not */}
+              {user ? (
+                <Button
+                  size="lg"
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-base font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                  onClick={() => navigate('/practice')}
+                >
+                  Practice Problem
+                  <Code className="ml-2 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-base font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                  onClick={() => setAuthModalOpen(true)}
+                >
+                  Get Started
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              )}
 
-              {/* Start Collaborating Button */}
+              {/* Start Collaborating Button - Always present */}
               <Button
                 variant="outline"
                 size="lg"

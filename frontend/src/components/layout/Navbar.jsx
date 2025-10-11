@@ -9,30 +9,26 @@ import {
   LogOut,
   User,
   ChevronDown,
-  Video,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 import AuthModal from "../auth/AuthModal";
-import VideoMeetingStarter from "../ui/VideoMeetingStarter";
 import { cn } from "../../lib/utils";
 import prepmate from "../../assets/prepmate.png";
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [videoMeetingOpen, setVideoMeetingOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const dropdownRef = useRef(null);
 
   const navItems = [
-    { name: "Home", href: "#home" },
-    { name: "Features", href: "#features" },
-    { name: "Problems", href: "#problems" },
-    { name: "About", href: "#about" },
+    { name: "Home", href: "/" },
+    { name: "Practice", href: "/practice" },
+    { name: "Collaboration", href: "/compiler" },
   ];
 
   // Close dropdown when clicking outside
@@ -67,7 +63,6 @@ const Navbar = () => {
             >
               <Link to="/" className="flex items-center">
                 <img src={prepmate} className="h-[40px] w-[30px]"></img>
-                
               </Link>
             </motion.div>
 
@@ -75,46 +70,24 @@ const Navbar = () => {
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">
                 {navItems.map((item) => (
-                  <motion.a
+                  <motion.div
                     key={item.name}
-                    href={item.href}
-                    className="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    {item.name}
-                  </motion.a>
+                    <Link
+                      to={item.href}
+                      className="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      {item.name}
+                    </Link>
+                  </motion.div>
                 ))}
-                <Link
-                  to="/editor"
-                  className="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Editor
-                </Link>
-                <Link
-                  to="/practice"
-                  className="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Practice
-                </Link>
               </div>
             </div>
 
             {/* Right side items - Minimal with Auth */}
             <div className="hidden md:flex items-center space-x-4">
-              {/* Video Meeting Button - Only show for authenticated users */}
-              {user && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setVideoMeetingOpen(true)}
-                  className="flex items-center space-x-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                >
-                  <Video className="h-4 w-4" />
-                  <span className="hidden lg:inline">Video Call</span>
-                </Button>
-              )}
-
               {/* Theme Toggle */}
               <Button
                 variant="ghost"
@@ -273,14 +246,14 @@ const Navbar = () => {
           >
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.name}
-                  href={item.href}
+                  to={item.href}
                   className="text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 block px-3 py-2 rounded-md text-base font-medium"
                   onClick={() => setIsOpen(false)}
                 >
                   {item.name}
-                </a>
+                </Link>
               ))}
 
               <div className="flex items-center justify-between px-3 py-2">
@@ -376,12 +349,6 @@ const Navbar = () => {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-      />
-
-      {/* Video Meeting Starter Modal */}
-      <VideoMeetingStarter
-        isOpen={videoMeetingOpen}
-        onClose={() => setVideoMeetingOpen(false)}
       />
     </>
   );

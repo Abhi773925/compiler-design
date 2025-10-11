@@ -10,7 +10,6 @@ import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import LandingPage from "./pages/LandingPage";
-import EditorPage from "./pages/EditorPage";
 import PracticePage from "./pages/PracticePage";
 import ProblemSolver from "./pages/ProblemSolver";
 import ProfilePage from "./pages/ProfilePage";
@@ -35,13 +34,15 @@ function App() {
             <div className="App">
               <Routes>
                 <Route path="/" element={<LandingPage />} />
-                <Route path="/editor" element={<EditorPage />} />
                 <Route path="/practice" element={<PracticePage />} />
                 <Route path="/practice/:slug" element={<ProblemSolver />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/compiler" element={<CollaborationPage />} />
                 <Route path="/meeting/:roomId" element={<VideoMeeting />} />
-                <Route path="/auth/github/callback" element={<GitHubCallback />} />
+                <Route
+                  path="/auth/github/callback"
+                  element={<GitHubCallback />}
+                />
                 <Route path="/github-callback" element={<GitHubCallback />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

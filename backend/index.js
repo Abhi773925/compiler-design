@@ -63,9 +63,11 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(limiter);
 app.use(morgan("combined"));
 app.use(express.json({ limit: "10mb" }));
@@ -147,20 +149,20 @@ io.on("connection", (socket) => {
       userId: socket.userId,
       joinedAt: new Date().toISOString(),
     });
-    
+
     // Check if there's an active call in the room
     if (roomsWithActiveCalls.has(roomId)) {
       // Notify the new user that a call is active
       socket.emit("callActiveInRoom", { roomId });
       console.log(`Notifying ${userName} about active call in room ${roomId}`);
-      
+
       // Also send the count of active participants for better UX
       if (activeCallParticipants.has(roomId)) {
         const participantCount = activeCallParticipants.get(roomId).size;
         if (participantCount > 0) {
-          socket.emit("callParticipantsCount", { 
-            roomId, 
-            count: participantCount 
+          socket.emit("callParticipantsCount", {
+            roomId,
+            count: participantCount,
           });
         }
       }
@@ -185,35 +187,35 @@ io.on("connection", (socket) => {
           // Update lastSeen
           existingParticipant.lastSeen = new Date();
         }
-        
+
         // Initialize file collections for this room if needed
         if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
         if (!roomFileMeta.has(roomId)) roomFileMeta.set(roomId, new Map());
-        
+
         // Load files from session into memory
         if (session.files && session.files.length > 0) {
-          session.files.forEach(file => {
+          session.files.forEach((file) => {
             roomFiles.get(roomId).set(file.fileId, {
               name: file.name,
               content: file.content || "",
-              updatedAt: file.uploadedAt || new Date().toISOString()
+              updatedAt: file.uploadedAt || new Date().toISOString(),
             });
-            
+
             roomFileMeta.get(roomId).set(file.fileId, {
               name: file.name,
               mime: file.mime || "text/plain",
               size: file.size || 0,
               uploadedBy: file.uploadedBy,
-              uploaderName: file.uploaderName
+              uploaderName: file.uploaderName,
             });
           });
-          
+
           // Set first file as active if no active file is set
           if (!roomActiveFile.has(roomId) && session.files.length > 0) {
             roomActiveFile.set(roomId, session.files[0].fileId);
           }
         }
-        
+
         session.lastActivity = new Date();
         await session.save();
       }
@@ -272,9 +274,16 @@ io.on("connection", (socket) => {
       if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
       const files = roomFiles.get(roomId);
       if (!files.has(fileId)) {
-        files.set(fileId, { name: name || fileId, content: "", updatedAt: new Date().toISOString() });
+        files.set(fileId, {
+          name: name || fileId,
+          content: "",
+          updatedAt: new Date().toISOString(),
+        });
       }
-      io.to(roomId).emit("fileOpened", { fileId, name: files.get(fileId).name });
+      io.to(roomId).emit("fileOpened", {
+        fileId,
+        name: files.get(fileId).name,
+      });
       // If no active file yet, set this as active
       if (!roomActiveFile.has(roomId)) {
         roomActiveFile.set(roomId, fileId);
@@ -292,7 +301,14 @@ io.on("connection", (socket) => {
       const files = roomFiles.get(roomId);
       const name = files.get(fileId)?.name || fileId;
       files.set(fileId, { name, content, updatedAt: new Date().toISOString() });
-      socket.to(roomId).emit("fileContentUpdate", { fileId, content, userId: socket.id, userName: socket.userName });
+      socket
+        .to(roomId)
+        .emit("fileContentUpdate", {
+          fileId,
+          content,
+          userId: socket.id,
+          userName: socket.userName,
+        });
     } catch (e) {
       console.error("changeFile error:", e);
     }
@@ -320,86 +336,66 @@ io.on("connection", (socket) => {
   });
 
   // Upload a file (metadata + content in base64 or text)
-  socket.on("uploadFile", async ({ roomId, fileId, name, mime, size, content, uploadedBy, uploaderName, source, metadata }) => {
-    try {
-      if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
-      if (!roomFileMeta.has(roomId)) roomFileMeta.set(roomId, new Map());
-      
-      const timestamp = new Date().toISOString();
-      roomFiles.get(roomId).set(fileId, { 
-        name: name || fileId, 
-        content: content || "", 
-        updatedAt: timestamp
-      });
-      
-      roomFileMeta.get(roomId).set(fileId, { 
-        name: name || fileId, 
-        mime: mime || "text/plain", 
-        size: size || 0,
-        uploadedBy: uploadedBy || socket.userId,
-        uploaderName: uploaderName || socket.userName,
-        source: source || "upload", // Track source of file (upload, github, cached)
-        metadata: metadata || {}    // Store additional metadata
-      });
-      
-      io.to(roomId).emit("fileUploaded", { 
-        fileId, 
-        name, 
-        mime, 
-        size, 
-        uploadedBy: uploadedBy || socket.userId,
-        uploaderName: uploaderName || socket.userName,
-        source: source || "upload"
-      });
-      
-      io.to(roomId).emit("fileContentSnapshot", { 
-        fileId, 
-        name, 
-        content: content || "" 
-      });
-      
-      // Save to database
+  socket.on(
+    "uploadFile",
+    async ({
+      roomId,
+      fileId,
+      name,
+      mime,
+      size,
+      content,
+      uploadedBy,
+      uploaderName,
+      source,
+      metadata,
+    }) => {
       try {
-        const session = await Session.findOne({ roomId });
-        if (session) {
-          // Check if file exists and update or add new
-          const fileIndex = session.files?.findIndex(f => f.fileId === fileId);
-          const fileEntry = {
-            fileId,
-            name: name || fileId,
-            content: content || "",
-            mime: mime || "text/plain",
-            size: size || 0,
-            uploadedBy: uploadedBy || socket.userId,
-            uploaderName: uploaderName || socket.userName,
-            uploadedAt: new Date(),
-            source: source || "upload",
-            metadata: metadata || {}
-          };
-          
-          if (fileIndex !== -1 && fileIndex !== undefined) {
-            session.files[fileIndex] = fileEntry;
-          } else {
-            if (!session.files) {
-              session.files = [];
-            }
-            session.files.push(fileEntry);
-          }
-          
-          session.lastActivity = new Date();
-          await session.save();
-          console.log(`File '${name}' (${source || 'upload'}) saved to database for room ${roomId}`);
-        } else {
-          // If session doesn't exist, create it
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + 30); // 30 days expiry
-          
-          const newSession = new Session({
-            roomId,
-            creatorName: socket.userName || "Anonymous",
-            creatorUserId: socket.userId || null,
-            expiresAt,
-            files: [{
+        if (!roomFiles.has(roomId)) roomFiles.set(roomId, new Map());
+        if (!roomFileMeta.has(roomId)) roomFileMeta.set(roomId, new Map());
+
+        const timestamp = new Date().toISOString();
+        roomFiles.get(roomId).set(fileId, {
+          name: name || fileId,
+          content: content || "",
+          updatedAt: timestamp,
+        });
+
+        roomFileMeta.get(roomId).set(fileId, {
+          name: name || fileId,
+          mime: mime || "text/plain",
+          size: size || 0,
+          uploadedBy: uploadedBy || socket.userId,
+          uploaderName: uploaderName || socket.userName,
+          source: source || "upload", // Track source of file (upload, github, cached)
+          metadata: metadata || {}, // Store additional metadata
+        });
+
+        io.to(roomId).emit("fileUploaded", {
+          fileId,
+          name,
+          mime,
+          size,
+          uploadedBy: uploadedBy || socket.userId,
+          uploaderName: uploaderName || socket.userName,
+          source: source || "upload",
+        });
+
+        io.to(roomId).emit("fileContentSnapshot", {
+          fileId,
+          name,
+          content: content || "",
+        });
+
+        // Save to database
+        try {
+          const session = await Session.findOne({ roomId });
+          if (session) {
+            // Check if file exists and update or add new
+            const fileIndex = session.files?.findIndex(
+              (f) => f.fileId === fileId
+            );
+            const fileEntry = {
               fileId,
               name: name || fileId,
               content: content || "",
@@ -409,20 +405,64 @@ io.on("connection", (socket) => {
               uploaderName: uploaderName || socket.userName,
               uploadedAt: new Date(),
               source: source || "upload",
-              metadata: metadata || {}
-            }]
-          });
-          
-          await newSession.save();
-          console.log(`New session created with file '${name}' for room ${roomId}`);
+              metadata: metadata || {},
+            };
+
+            if (fileIndex !== -1 && fileIndex !== undefined) {
+              session.files[fileIndex] = fileEntry;
+            } else {
+              if (!session.files) {
+                session.files = [];
+              }
+              session.files.push(fileEntry);
+            }
+
+            session.lastActivity = new Date();
+            await session.save();
+            console.log(
+              `File '${name}' (${
+                source || "upload"
+              }) saved to database for room ${roomId}`
+            );
+          } else {
+            // If session doesn't exist, create it
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 30); // 30 days expiry
+
+            const newSession = new Session({
+              roomId,
+              creatorName: socket.userName || "Anonymous",
+              creatorUserId: socket.userId || null,
+              expiresAt,
+              files: [
+                {
+                  fileId,
+                  name: name || fileId,
+                  content: content || "",
+                  mime: mime || "text/plain",
+                  size: size || 0,
+                  uploadedBy: uploadedBy || socket.userId,
+                  uploaderName: uploaderName || socket.userName,
+                  uploadedAt: new Date(),
+                  source: source || "upload",
+                  metadata: metadata || {},
+                },
+              ],
+            });
+
+            await newSession.save();
+            console.log(
+              `New session created with file '${name}' for room ${roomId}`
+            );
+          }
+        } catch (dbError) {
+          console.error("Error saving file to database:", dbError);
         }
-      } catch (dbError) {
-        console.error("Error saving file to database:", dbError);
+      } catch (e) {
+        console.error("uploadFile error:", e);
       }
-    } catch (e) {
-      console.error("uploadFile error:", e);
     }
-  });
+  );
 
   // Handle language changes
   socket.on("languageChange", async ({ roomId, language }) => {
@@ -580,45 +620,53 @@ io.on("connection", (socket) => {
   socket.on("userReadyForCall", ({ roomId, isReconnecting }) => {
     // Track that this room has an active call
     roomsWithActiveCalls.add(roomId);
-    
+
     // Track this user as a call participant
     if (!activeCallParticipants.has(roomId)) {
       activeCallParticipants.set(roomId, new Set());
     }
     activeCallParticipants.get(roomId).add(socket.id);
-    
+
     // Get all existing participants in the call
     const existingParticipants = [];
     if (activeCallParticipants.has(roomId)) {
-      activeCallParticipants.get(roomId).forEach(participantId => {
+      activeCallParticipants.get(roomId).forEach((participantId) => {
         if (participantId !== socket.id) {
           const user = getUserFromRoom(roomId, participantId);
           if (user) {
             existingParticipants.push({
               userId: participantId,
-              userName: user.name
+              userName: user.name,
             });
           }
         }
       });
     }
-    
+
     // Send list of existing call participants to the new user
     if (existingParticipants.length > 0) {
       socket.emit("existingCallParticipants", {
         participants: existingParticipants,
-        isReconnect: !!isReconnecting
+        isReconnect: !!isReconnecting,
       });
-      console.log(`Sent ${existingParticipants.length} existing participants to ${socket.userName}${isReconnecting ? " (reconnecting)" : ""}`);
+      console.log(
+        `Sent ${existingParticipants.length} existing participants to ${
+          socket.userName
+        }${isReconnecting ? " (reconnecting)" : ""}`
+      );
     }
-    
+
     // Notify others about this new participant
     socket.to(roomId).emit("userReadyForCall", {
       userId: socket.id,
       userName: socket.userName,
-      isReconnect: !!isReconnecting
+      isReconnect: !!isReconnecting,
     });
-    console.log(`${socket.userName} is ready for call in room: ${roomId}${isReconnecting ? " (reconnecting)" : ""}`);
+    console.log(
+      `${socket.userName} is ready for call in room: ${roomId}${
+        isReconnecting ? " (reconnecting)" : ""
+      }`
+    );
   });
 
   // Handle WebRTC offer
@@ -628,15 +676,20 @@ io.on("connection", (socket) => {
         offer: offer,
         from: socket.id,
         userName: socket.userName,
-        roomId: roomId
+        roomId: roomId,
       });
-      console.log(`WebRTC offer sent from ${socket.userName} (${socket.id}) to ${to}`);
+      console.log(
+        `WebRTC offer sent from ${socket.userName} (${socket.id}) to ${to}`
+      );
     } catch (error) {
-      console.error(`Error sending WebRTC offer from ${socket.id} to ${to}:`, error);
+      console.error(
+        `Error sending WebRTC offer from ${socket.id} to ${to}:`,
+        error
+      );
       socket.emit("webrtcError", {
         type: "offer-failed",
         message: "Failed to send offer",
-        toUser: to
+        toUser: to,
       });
     }
   });
@@ -648,15 +701,20 @@ io.on("connection", (socket) => {
         answer: answer,
         from: socket.id,
         userName: socket.userName,
-        roomId: roomId
+        roomId: roomId,
       });
-      console.log(`WebRTC answer sent from ${socket.userName} (${socket.id}) to ${to}`);
+      console.log(
+        `WebRTC answer sent from ${socket.userName} (${socket.id}) to ${to}`
+      );
     } catch (error) {
-      console.error(`Error sending WebRTC answer from ${socket.id} to ${to}:`, error);
+      console.error(
+        `Error sending WebRTC answer from ${socket.id} to ${to}:`,
+        error
+      );
       socket.emit("webrtcError", {
         type: "answer-failed",
         message: "Failed to send answer",
-        toUser: to
+        toUser: to,
       });
     }
   });
@@ -668,12 +726,15 @@ io.on("connection", (socket) => {
         candidate: candidate,
         from: socket.id,
         userName: socket.userName,
-        roomId: roomId
+        roomId: roomId,
       });
       // Uncomment for detailed ICE candidate logging
       // console.log(`ICE candidate sent from ${socket.userName} (${socket.id}) to ${to}`);
     } catch (error) {
-      console.error(`Error sending ICE candidate from ${socket.id} to ${to}:`, error);
+      console.error(
+        `Error sending ICE candidate from ${socket.id} to ${to}:`,
+        error
+      );
     }
   });
 
@@ -682,7 +743,7 @@ io.on("connection", (socket) => {
     // Remove user from active call participants
     if (activeCallParticipants.has(roomId)) {
       activeCallParticipants.get(roomId).delete(socket.id);
-      
+
       // If no participants left, mark call as inactive
       if (activeCallParticipants.get(roomId).size === 0) {
         activeCallParticipants.delete(roomId);
@@ -691,12 +752,12 @@ io.on("connection", (socket) => {
       } else {
         // Notify remaining participants about the updated count
         io.to(roomId).emit("callParticipantsCount", {
-          roomId, 
-          count: activeCallParticipants.get(roomId).size
+          roomId,
+          count: activeCallParticipants.get(roomId).size,
         });
       }
     }
-    
+
     // Notify others that this user left the call
     socket.to(roomId).emit("userLeftCall", {
       userId: socket.id,
@@ -704,38 +765,40 @@ io.on("connection", (socket) => {
     });
     console.log(`${socket.userName} left the call in room: ${roomId}`);
   });
-  
+
   // Handle explicit request for room call status (useful after refresh or reconnection)
   socket.on("checkRoomCallStatus", ({ roomId }) => {
     const hasActiveCall = roomsWithActiveCalls.has(roomId);
     let participantCount = 0;
     let participants = [];
-    
+
     if (hasActiveCall && activeCallParticipants.has(roomId)) {
       participantCount = activeCallParticipants.get(roomId).size;
-      
+
       // Get participant details
-      activeCallParticipants.get(roomId).forEach(participantId => {
+      activeCallParticipants.get(roomId).forEach((participantId) => {
         if (participantId !== socket.id) {
           const user = getUserFromRoom(roomId, participantId);
           if (user) {
             participants.push({
               userId: participantId,
-              userName: user.name
+              userName: user.name,
             });
           }
         }
       });
     }
-    
+
     socket.emit("roomCallStatus", {
       roomId,
       hasActiveCall,
       participantCount,
-      participants
+      participants,
     });
-    
-    console.log(`Sent room call status to ${socket.userName}: active=${hasActiveCall}, participants=${participantCount}`);
+
+    console.log(
+      `Sent room call status to ${socket.userName}: active=${hasActiveCall}, participants=${participantCount}`
+    );
   });
 
   // Request current code state when joining
@@ -789,45 +852,54 @@ io.on("connection", (socket) => {
     if (socket.currentRoom) {
       if (activeCallParticipants.has(socket.currentRoom)) {
         // Store user info before removing
-        const isCallParticipant = activeCallParticipants.get(socket.currentRoom).has(socket.id);
+        const isCallParticipant = activeCallParticipants
+          .get(socket.currentRoom)
+          .has(socket.id);
         const userName = socket.userName || "A user";
-        
+
         if (isCallParticipant) {
           // Don't immediately remove the user - give them a chance to reconnect
           // We'll set a timeout to remove them if they don't reconnect in 30 seconds
           setTimeout(() => {
             // After timeout, check if this socket is still disconnected (not replaced by a new one)
-            if (activeCallParticipants.has(socket.currentRoom) && 
-                activeCallParticipants.get(socket.currentRoom).has(socket.id)) {
-                
+            if (
+              activeCallParticipants.has(socket.currentRoom) &&
+              activeCallParticipants.get(socket.currentRoom).has(socket.id)
+            ) {
               // Now remove them as they didn't reconnect in time
               activeCallParticipants.get(socket.currentRoom).delete(socket.id);
-              
+
               // Notify others that this user left the call for good
               io.to(socket.currentRoom).emit("userLeftCall", {
                 userId: socket.id,
                 userName,
-                reason: "timeout"
+                reason: "timeout",
               });
-              
-              console.log(`${userName} removed from call in room ${socket.currentRoom} after reconnect timeout`);
-              
+
+              console.log(
+                `${userName} removed from call in room ${socket.currentRoom} after reconnect timeout`
+              );
+
               // If no participants left in call, clean up
               if (activeCallParticipants.get(socket.currentRoom).size === 0) {
                 activeCallParticipants.delete(socket.currentRoom);
                 roomsWithActiveCalls.delete(socket.currentRoom);
-                console.log(`Call ended in room ${socket.currentRoom} - all participants disconnected`);
+                console.log(
+                  `Call ended in room ${socket.currentRoom} - all participants disconnected`
+                );
               }
             }
           }, 30000); // 30 second timeout
-          
+
           // For immediate UI feedback, emit a temporary disconnect event
           socket.to(socket.currentRoom).emit("userTemporarilyDisconnected", {
             userId: socket.id,
             userName,
           });
-          
-          console.log(`${userName} temporarily disconnected from call in room ${socket.currentRoom}`);
+
+          console.log(
+            `${userName} temporarily disconnected from call in room ${socket.currentRoom}`
+          );
         }
       }
     }
@@ -886,28 +958,28 @@ io.on("connection", (socket) => {
   });
 
   // Handle raise hand
-  socket.on('raiseHand', ({ roomId, timestamp }) => {
+  socket.on("raiseHand", ({ roomId, timestamp }) => {
     const user = getUserFromRoom(roomId, socket.id);
-    
+
     if (user) {
       // Broadcast to everyone else in the room
-      socket.to(roomId).emit('userRaisedHand', {
+      socket.to(roomId).emit("userRaisedHand", {
         userId: socket.id,
         userName: user.name,
-        timestamp
+        timestamp,
       });
     }
   });
 
   // Handle lower hand
-  socket.on('lowerHand', ({ roomId }) => {
+  socket.on("lowerHand", ({ roomId }) => {
     const user = getUserFromRoom(roomId, socket.id);
-    
+
     if (user) {
       // Broadcast to everyone else in the room
-      socket.to(roomId).emit('userLoweredHand', {
+      socket.to(roomId).emit("userLoweredHand", {
         userId: socket.id,
-        userName: user.name
+        userName: user.name,
       });
     }
   });
@@ -916,23 +988,25 @@ io.on("connection", (socket) => {
   socket.on("join-call", (path) => {
     const roomId = path;
     socket.join(roomId);
-    
+
     // Store room info for this socket
     socket.currentVideoRoom = roomId;
-    
+
     // Get all sockets in this room
-    const socketsInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
-    
+    const socketsInRoom = Array.from(
+      io.sockets.adapter.rooms.get(roomId) || []
+    );
+
     // Notify existing users about new user
     socketsInRoom.forEach((socketId) => {
       if (socketId !== socket.id) {
         io.to(socketId).emit("user-joined", socket.id, socketsInRoom);
       }
     });
-    
+
     // Send to new user list of existing users
     socket.emit("user-joined", socket.id, socketsInRoom);
-    
+
     // Set up message handling for this room
     socket.on(
       "chat-message",
@@ -955,7 +1029,9 @@ io.on("connection", (socket) => {
   socket.on("chat-message", (data, sender) => {
     const roomId = socket.currentVideoRoom;
     if (roomId) {
-      const socketsInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+      const socketsInRoom = Array.from(
+        io.sockets.adapter.rooms.get(roomId) || []
+      );
       socketsInRoom.forEach((elem) => {
         if (elem !== socket.id) {
           io.to(elem).emit("chat-message", data, sender, socket.id);
@@ -968,7 +1044,9 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     const roomId = socket.currentVideoRoom;
     if (roomId) {
-      const socketsInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+      const socketsInRoom = Array.from(
+        io.sockets.adapter.rooms.get(roomId) || []
+      );
       socketsInRoom.forEach((elem) => {
         io.to(elem).emit("user-left", socket.id);
       });
@@ -984,15 +1062,24 @@ mongoose
 
     // Force drop files collection to ensure clean schema
     try {
-      const collections = await mongoose.connection.db.listCollections({ name: 'files' }).toArray();
+      const collections = await mongoose.connection.db
+        .listCollections({ name: "files" })
+        .toArray();
       if (collections.length > 0) {
-        await mongoose.connection.db.dropCollection('files');
-        console.log("✅ Dropped old files collection - fresh schema will be created");
+        await mongoose.connection.db.dropCollection("files");
+        console.log(
+          "✅ Dropped old files collection - fresh schema will be created"
+        );
       } else {
-        console.log("ℹ️ Files collection doesn't exist yet - will be created on first save");
+        console.log(
+          "ℹ️ Files collection doesn't exist yet - will be created on first save"
+        );
       }
     } catch (error) {
-      console.error("⚠️ Error checking/dropping files collection:", error.message);
+      console.error(
+        "⚠️ Error checking/dropping files collection:",
+        error.message
+      );
     }
 
     // Start cleanup job for expired sessions (runs daily at midnight)

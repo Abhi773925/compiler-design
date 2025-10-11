@@ -1,10 +1,27 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Video, 
+  VideoOff, 
+  Mic, 
+  MicOff, 
+  PhoneOff, 
+  Monitor, 
+  MonitorOff,
+  Users,
+  Copy,
+  Check,
+  Settings,
+  Maximize2,
+  Minimize2,
+  ArrowLeft
+} from "lucide-react";
 import io from "socket.io-client";
-import "./VideoMeet.css";
-import { Icons } from "../components/icons";
 
-const server_url = "https://compiler-design.onrender.com";
+const server_url = "http://localhost:5000";
 var connections = {};
 const peerConfigConnections = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -13,6 +30,8 @@ const peerConfigConnections = {
 export default function VideoMeeting() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { theme } = useTheme();
 
   var socketRef = useRef();
   let socketIdRef = useRef();
@@ -20,26 +39,87 @@ export default function VideoMeeting() {
 
   let [videoAvailable, setVideoAvailable] = useState(true);
   let [audioAvailable, setAudioAvailable] = useState(true);
-  let [video, setVideo] = useState([]);
-  let [audio, setAudio] = useState();
-  let [screen, setScreen] = useState();
-  let [showModal, setModal] = useState(false);
-  let [screenAvailable, setScreenAvailable] = useState();
-  let [messages, setMessages] = useState([]);
-  let [message, setMessage] = useState("");
-  let [newMessages, setNewMessages] = useState(0);
-  let [askForUsername, setAskForUsername] = useState(true);
-  let [username, setUsername] = useState("");
+  let [video, setVideo] = useState(true);
+  let [audio, setAudio] = useState(true);
+  let [screen, setScreen] = useState(false);
+  let [screenAvailable, setScreenAvailable] = useState(false);
+  let [isFullscreen, setIsFullscreen] = useState(false);
+  let [participantCount, setParticipantCount] = useState(1);
+  let [copied, setCopied] = useState(false);
+  
+  // Get username from authenticated user or generate a stable guest name
+  const getUsername = () => {
+    if (user?.username) return user.username;
+    if (user?.name) return user.name;
+    if (user?.email) return user.email.split('@')[0];
+    return `Guest_${Date.now().toString(36)}`;
+  };
+  
+  let [username, setUsername] = useState(getUsername());
 
   const videoRef = useRef([]);
   let [videos, setVideos] = useState([]);
 
   const roomIdStr = roomId?.toString() || "";
 
+  // Dynamic layout based on participant count
+  const getVideoLayoutClasses = () => {
+    const totalParticipants = videos.length + 1; // +1 for local user
+    
+    if (totalParticipants === 1) {
+      return {
+        container: "flex items-center justify-center h-full",
+        localVideo: "w-full max-w-4xl h-96 lg:h-[500px]",
+        remoteVideos: ""
+      };
+    } else if (totalParticipants === 2) {
+      return {
+        container: "grid grid-cols-1 lg:grid-cols-2 gap-4 h-full",
+        localVideo: "w-full h-64 lg:h-80",
+        remoteVideos: "w-full h-64 lg:h-80"
+      };
+    } else if (totalParticipants <= 4) {
+      return {
+        container: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 h-full",
+        localVideo: "w-full h-48 lg:h-64",
+        remoteVideos: "w-full h-48 lg:h-64"
+      };
+    } else {
+      return {
+        container: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 h-full",
+        localVideo: "w-full h-40 lg:h-48",
+        remoteVideos: "w-full h-40 lg:h-48"
+      };
+    }
+  };
+
   useEffect(() => {
-    console.log("HELLO");
     getPermissions();
-  });
+    // Auto-connect when component mounts since we have the username
+    if (username) {
+      getMedia();
+    }
+  }, [username]);
+
+  const copyRoomId = async () => {
+    try {
+      await navigator.clipboard.writeText(roomId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy room ID:', err);
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
 
   let getDislayMedia = () => {
     if (screen) {
@@ -296,13 +376,13 @@ export default function VideoMeeting() {
       socketRef.current.emit("join-call", roomIdStr);
       socketIdRef.current = socketRef.current.id;
 
-      socketRef.current.on("chat-message", addMessage);
-
       socketRef.current.on("user-left", (id) => {
         setVideos((videos) => videos.filter((video) => video.socketId !== id));
+        setParticipantCount(prev => prev - 1);
       });
 
       socketRef.current.on("user-joined", (id, clients) => {
+        setParticipantCount(clients.length + 1);
         clients.forEach((socketListId) => {
           connections[socketListId] = new RTCPeerConnection(
             peerConfigConnections
@@ -432,180 +512,265 @@ export default function VideoMeeting() {
     setScreen(!screen);
   };
 
-  let handleEndCall = () => {
+  // Cleanup function for camera and microphone
+  const cleanupMediaDevices = () => {
     try {
-      let tracks = localVideoref.current.srcObject.getTracks();
-      tracks.forEach((track) => track.stop());
-    } catch (e) {}
-    navigate("/");
-  };
+      // Stop all tracks in the local stream
+      if (window.localStream) {
+        window.localStream.getTracks().forEach((track) => track.stop());
+      }
+      
+      // Stop local video element tracks
+      if (localVideoref.current && localVideoref.current.srcObject) {
+        localVideoref.current.srcObject.getTracks().forEach((track) => track.stop());
+      }
 
-  let openChat = () => {
-    setModal(true);
-    setNewMessages(0);
-  };
+      // Close all peer connections
+      Object.values(connections).forEach(connection => {
+        if (connection.close) {
+          connection.close();
+        }
+      });
 
-  let closeChat = () => {
-    setModal(false);
-  };
+      // Disconnect socket
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
 
-  let handleMessage = (e) => {
-    setMessage(e.target.value);
-  };
-
-  const addMessage = (data, sender, socketIdSender) => {
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { sender: sender, data: data },
-    ]);
-    if (socketIdSender !== socketIdRef.current) {
-      setNewMessages((prevNewMessages) => prevNewMessages + 1);
+      console.log("Media devices cleaned up successfully");
+    } catch (e) {
+      console.error("Error cleaning up media devices:", e);
     }
   };
 
-  let sendMessage = () => {
-    console.log(socketRef.current);
-    socketRef.current.emit("chat-message", message, username);
-    setMessage("");
+  let handleEndCall = () => {
+    cleanupMediaDevices();
+    navigate(-1); // Navigate back to previous page
   };
 
-  let connect = () => {
-    setAskForUsername(false);
-    getMedia();
-  };
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      cleanupMediaDevices();
+    };
+  }, []);
 
   return (
-    <div className="video-meet">
-      {askForUsername ? (
-        <div className="lobby">
-          <div className="lobby-container">
-            <h2 className="lobby-title">Enter into Lobby</h2>
-            <div className="lobby-form">
-              <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="lobby-input"
-              />
-              <button className="connect-button" onClick={connect}>
-                Connect
-              </button>
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300`}>
+      {/* Header */}
+      <div className={`${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <Video className={`w-6 h-6 ${theme === 'dark' ? 'text-orange-400' : 'text-orange-600'}`} />
+              <h1 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                Video Meeting
+              </h1>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Users className={`w-4 h-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} />
+              <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                {videos.length + 1} participant{videos.length !== 0 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            {/* Room ID with copy button */}
+            <div className="flex items-center space-x-2">
+              <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                Room: <span className="text-orange-500 font-mono">{roomId}</span>
+              </span>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={copyRoomId}
+                className={`p-2 rounded-md ${
+                  theme === 'dark' 
+                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-orange-400' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-orange-600'
+                } transition-all duration-200`}
+                title="Copy Room ID"
+              >
+                {copied ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </motion.button>
+              {copied && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="text-sm text-green-500 font-medium"
+                >
+                  Copied!
+                </motion.span>
+              )}
             </div>
 
-            <div className="video-preview">
-              <video ref={localVideoref} autoPlay muted></video>
-            </div>
+            {/* Fullscreen toggle */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={toggleFullscreen}
+              className={`p-2 rounded-md ${
+                theme === 'dark' 
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-orange-400' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-orange-600'
+              } transition-all duration-200`}
+              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </motion.button>
+
+            {/* Exit Meeting Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleEndCall}
+              className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200 shadow-md"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Leave</span>
+            </motion.button>
           </div>
         </div>
-      ) : (
-        <div className="meet-video-container">
-          {showModal && (
-            <div className="chat-room">
-              <div className="chat-container">
-                <div className="chat-header">
-                  <h1>Chat</h1>
-                  <button
-                    className="close-chat"
-                    onClick={() => setModal(false)}
-                  >
-                    ×
-                  </button>
-                </div>
+      </div>
 
-                <div className="chatting-display">
-                  {messages.length !== 0 ? (
-                    messages.map((item, index) => (
-                      <div className="message" key={index}>
-                        <p className="message-sender">{item.sender}</p>
-                        <p className="message-content">{item.data}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="no-messages">No Messages Yet</p>
-                  )}
-                </div>
+      {/* Main Video Area */}
+      <div className="relative flex-1 p-6">
+        <div className={getVideoLayoutClasses().container}>
+          {/* Local Video */}
+          <div className="relative group">
+            <div className={`relative ${getVideoLayoutClasses().localVideo} rounded-xl overflow-hidden ${
+              theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'
+            } shadow-lg`}>
+              <video
+                ref={localVideoref}
+                autoPlay
+                muted
+                className="w-full h-full object-cover"
+              />
+              
+              {/* User info overlay */}
+              <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-md text-sm">
+                {username} (You)
+              </div>
 
-                <div className="chatting-area">
-                  <input
-                    type="text"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Enter your message"
-                    className="chat-input"
-                  />
-                  <button className="send-button" onClick={sendMessage}>
-                    Send
-                  </button>
-                </div>
+              {/* Video status indicators */}
+              <div className="absolute top-4 right-4 flex space-x-2">
+                {!video && (
+                  <div className="bg-red-500 text-white p-2 rounded-full">
+                    <VideoOff className="w-4 h-4" />
+                  </div>
+                )}
+                {!audio && (
+                  <div className="bg-red-500 text-white p-2 rounded-full">
+                    <MicOff className="w-4 h-4" />
+                  </div>
+                )}
               </div>
             </div>
-          )}
-
-          <div className="button-containers">
-            <button
-              className={`control-button ${video ? "active" : ""}`}
-              onClick={handleVideo}
-            >
-              {video ? <Icons.Videocam /> : <Icons.VideocamOff />}
-            </button>
-
-            <button className="control-button end-call" onClick={handleEndCall}>
-              <Icons.CallEnd />
-            </button>
-
-            <button
-              className={`control-button ${audio ? "active" : ""}`}
-              onClick={handleAudio}
-            >
-              {audio ? <Icons.Mic /> : <Icons.MicOff />}
-            </button>
-
-            {screenAvailable && (
-              <button
-                className={`control-button ${screen ? "active" : ""}`}
-                onClick={handleScreen}
-              >
-                {screen ? <Icons.ScreenShare /> : <Icons.StopScreenShare />}
-              </button>
-            )}
-
-            <button
-              className="control-button chat-button"
-              onClick={() => setModal(!showModal)}
-            >
-              <Icons.Chat />
-              {newMessages > 0 && (
-                <span className="message-badge">{newMessages}</span>
-              )}
-            </button>
           </div>
 
-          <video
-            className="meet-user-video"
-            ref={localVideoref}
-            autoPlay
-            muted
-          ></video>
-
-          <div className="conference-view">
-            {videos.map((video) => (
-              <div key={video.socketId} className="remote-video-container">
+          {/* Remote Videos */}
+          {videos.map((videoItem, index) => (
+            <motion.div
+              key={videoItem.socketId}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.3 }}
+              className="relative group"
+            >
+              <div className={`relative ${getVideoLayoutClasses().remoteVideos} rounded-xl overflow-hidden ${
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'
+              } shadow-lg`}>
                 <video
-                  data-socket={video.socketId}
                   ref={(ref) => {
-                    if (ref && video.stream) {
-                      ref.srcObject = video.stream;
+                    if (ref && videoItem.stream) {
+                      ref.srcObject = videoItem.stream;
                     }
                   }}
                   autoPlay
-                  className="remote-video"
-                ></video>
+                  className="w-full h-full object-cover"
+                />
+                
+                <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-md text-sm">
+                  Participant {index + 1}
+                </div>
               </div>
-            ))}
-          </div>
+            </motion.div>
+          ))}
         </div>
-      )}
+      </div>
+
+      {/* Control Panel */}
+      <div className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 ${
+        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+      } border rounded-2xl shadow-2xl px-6 py-4`}>
+        <div className="flex items-center space-x-4">
+          {/* Video Toggle */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleVideo}
+            className={`p-4 rounded-xl transition-all duration-200 shadow-lg ${
+              video 
+                ? (theme === 'dark' ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white')
+                : (theme === 'dark' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-500 hover:bg-red-600 text-white')
+            }`}
+            title={video ? "Turn off camera" : "Turn on camera"}
+          >
+            {video ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+          </motion.button>
+
+          {/* Audio Toggle */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleAudio}
+            className={`p-4 rounded-xl transition-all duration-200 shadow-lg ${
+              audio 
+                ? (theme === 'dark' ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white')
+                : (theme === 'dark' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-500 hover:bg-red-600 text-white')
+            }`}
+            title={audio ? "Mute microphone" : "Unmute microphone"}
+          >
+            {audio ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+          </motion.button>
+
+          {/* Screen Share Toggle */}
+          {screenAvailable && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleScreen}
+              className={`p-4 rounded-xl transition-all duration-200 shadow-lg ${
+                screen 
+                  ? (theme === 'dark' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white')
+                  : (theme === 'dark' ? 'bg-gray-600 hover:bg-gray-700 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-600')
+              }`}
+              title={screen ? "Stop sharing screen" : "Share screen"}
+            >
+              {screen ? <MonitorOff className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
+            </motion.button>
+          )}
+
+          {/* End Call Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleEndCall}
+            className="p-4 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all duration-200 shadow-lg"
+            title="Leave meeting"
+          >
+            <PhoneOff className="w-5 h-5" />
+          </motion.button>
+        </div>
+      </div>
     </div>
   );
 }

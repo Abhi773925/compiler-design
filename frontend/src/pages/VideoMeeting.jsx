@@ -4,7 +4,7 @@ import io from "socket.io-client";
 import "./VideoMeet.css";
 import { Icons } from "../components/icons";
 
-const server_url = "http://localhost:5000";
+const server_url = "https://compiler-design.onrender.com";
 var connections = {};
 const peerConfigConnections = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],

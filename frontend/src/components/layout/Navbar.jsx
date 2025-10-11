@@ -9,18 +9,21 @@ import {
   LogOut,
   User,
   ChevronDown,
+  Video,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 import AuthModal from "../auth/AuthModal";
+import VideoMeetingStarter from "../ui/VideoMeetingStarter";
 import { cn } from "../../lib/utils";
 import prepmate from "../../assets/prepmate.png";
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [videoMeetingOpen, setVideoMeetingOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const dropdownRef = useRef(null);
@@ -99,6 +102,19 @@ const Navbar = () => {
 
             {/* Right side items - Minimal with Auth */}
             <div className="hidden md:flex items-center space-x-4">
+              {/* Video Meeting Button - Only show for authenticated users */}
+              {user && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setVideoMeetingOpen(true)}
+                  className="flex items-center space-x-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                >
+                  <Video className="h-4 w-4" />
+                  <span className="hidden lg:inline">Video Call</span>
+                </Button>
+              )}
+
               {/* Theme Toggle */}
               <Button
                 variant="ghost"
@@ -360,6 +376,12 @@ const Navbar = () => {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
+      />
+
+      {/* Video Meeting Starter Modal */}
+      <VideoMeetingStarter
+        isOpen={videoMeetingOpen}
+        onClose={() => setVideoMeetingOpen(false)}
       />
     </>
   );

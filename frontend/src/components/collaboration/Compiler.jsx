@@ -11,6 +11,8 @@ import "tldraw/tldraw.css"
 import GitHubIntegration from "../github/GitHubIntegration"
 import GitHubSaveModal from "../github/GitHubSaveModal"
 import FilesTab from "./FilesTab"
+import VideoCall from "./VideoCall"
+import IncomingCallModal from "./IncomingCallModal"
 import { saveFile, getFileById } from "../../services/fileService"
 import { detectLanguage } from './FileFunctions'
 import { Spotlight } from "../ui/BackgroundEffects"
@@ -46,6 +48,12 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showExitWarning, setShowExitWarning] = useState(false)
+
+  // Video call state
+  const [isCallActive, setIsCallActive] = useState(false)
+  const [showIncomingCall, setShowIncomingCall] = useState(false)
+  const [incomingCallData, setIncomingCallData] = useState(null)
+  const [callParticipants, setCallParticipants] = useState([])
 
   // Collaboration state
   const [roomUsers, setRoomUsers] = useState([])
@@ -1037,6 +1045,50 @@ const handleFinalExit = () => {
 // Handle cancel exit
 const handleCancelExit = () => {
   setShowExitWarning(false)
+}
+
+// Video call handlers
+const handleIncomingCall = ({ fromUser, fromUserId }) => {
+  setIncomingCallData({ fromUser, fromUserId })
+  setShowIncomingCall(true)
+
+  // Auto-decline after 30 seconds
+  setTimeout(() => {
+    if (showIncomingCall) {
+      handleDeclineCall()
+    }
+  }, 30000)
+}
+
+const handleAcceptCall = () => {
+  setShowIncomingCall(false)
+  setIsCallActive(true)
+
+  if (socketRef.current && incomingCallData) {
+    socketRef.current.emit("call-accepted", {
+      roomId,
+      fromUserId: incomingCallData.fromUserId,
+    })
+  }
+
+  setIncomingCallData(null)
+}
+
+const handleDeclineCall = () => {
+  setShowIncomingCall(false)
+
+  if (socketRef.current && incomingCallData) {
+    socketRef.current.emit("call-declined", {
+      roomId,
+      fromUserId: incomingCallData.fromUserId,
+    })
+  }
+
+  setIncomingCallData(null)
+}
+
+const handleCallToggle = (active) => {
+  setIsCallActive(active)
 }
 
 const runCode = async () => {
@@ -5035,6 +5087,22 @@ return (
               <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z" />
             </svg>
           </button>
+
+          {/* Video Call Tab */}
+          <button
+            onClick={() => setActiveTab(activeTab === "video" ? null : "video")}
+            className={`p-2.5 md:p-3 ${activeTab === "video" ? "bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400" : "hover:bg-orange-100 dark:hover:bg-orange-900/20 text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400"} rounded-lg mb-3 md:mb-4 transition-all duration-200 hover:scale-105 relative`}
+            title="Video Call"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto">
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            {isCallActive && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+            )}
+          </button>
+
            {/* GitHub Load Button */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -5329,6 +5397,22 @@ return (
                 {/* Whiteboard Tab Content - Removed, now opens in fullscreen */}
 
                 {/* Video Tab Content */}
+                {activeTab === "video" && (
+                  <div className="flex flex-col h-full">
+                    <div className="flex-1 p-4">
+                      <VideoCall
+                        socket={socketRef.current}
+                        roomId={roomId}
+                        userName={userName}
+                        isCallActive={isCallActive}
+                        onCallToggle={handleCallToggle}
+                        onIncomingCall={handleIncomingCall}
+                        participants={callParticipants}
+                        theme={appTheme}
+                      />
+                    </div>
+                  </div>
+                )}
                
               </div>
             </motion.div>
@@ -6004,6 +6088,15 @@ return (
           />
         )}
       </AnimatePresence>
+
+      {/* Incoming Call Modal */}
+      <IncomingCallModal
+        isOpen={showIncomingCall}
+        onAccept={handleAcceptCall}
+        onDecline={handleDeclineCall}
+        callerName={incomingCallData?.fromUser}
+        theme={appTheme}
+      />
 
       {/* Exit Warning Modal */}
       <AnimatePresence>

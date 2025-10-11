@@ -911,6 +911,69 @@ io.on("connection", (socket) => {
       });
     }
   });
+
+  // Video Meeting WebRTC Signaling Events (Meetly Implementation)
+  socket.on("join-call", (path) => {
+    const roomId = path;
+    socket.join(roomId);
+    
+    // Store room info for this socket
+    socket.currentVideoRoom = roomId;
+    
+    // Get all sockets in this room
+    const socketsInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    
+    // Notify existing users about new user
+    socketsInRoom.forEach((socketId) => {
+      if (socketId !== socket.id) {
+        io.to(socketId).emit("user-joined", socket.id, socketsInRoom);
+      }
+    });
+    
+    // Send to new user list of existing users
+    socket.emit("user-joined", socket.id, socketsInRoom);
+    
+    // Set up message handling for this room
+    socket.on(
+      "chat-message",
+      (data, sender) => {
+        // Broadcast to all users in the room
+        socketsInRoom.forEach((elem) => {
+          io.to(elem).emit("chat-message", data, sender, socket.id);
+        });
+      },
+      (error) => {
+        console.log("Error in chat message:", error);
+      }
+    );
+  });
+
+  socket.on("signal", (toId, message) => {
+    io.to(toId).emit("signal", socket.id, message);
+  });
+
+  socket.on("chat-message", (data, sender) => {
+    const roomId = socket.currentVideoRoom;
+    if (roomId) {
+      const socketsInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+      socketsInRoom.forEach((elem) => {
+        if (elem !== socket.id) {
+          io.to(elem).emit("chat-message", data, sender, socket.id);
+        }
+      });
+    }
+  });
+
+  // Handle video call disconnection
+  socket.on("disconnect", () => {
+    const roomId = socket.currentVideoRoom;
+    if (roomId) {
+      const socketsInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+      socketsInRoom.forEach((elem) => {
+        io.to(elem).emit("user-left", socket.id);
+      });
+    }
+  });
 });
 
 // Connect to MongoDB

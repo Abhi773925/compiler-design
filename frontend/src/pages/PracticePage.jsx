@@ -1,19 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Clock, Users, CheckCircle, Trophy, Code, Tag } from "lucide-react";
+import { 
+  Clock, 
+  Users, 
+  CheckCircle, 
+  Trophy, 
+  Code, 
+  Tag, 
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Filter
+} from "lucide-react";
 import Navbar from "../components/layout/Navbar";
 
 const PracticePage = () => {
   const [problems, setProblems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   const difficulties = ["All", "Easy", "Medium", "Hard"];
   const difficultyColors = {
-    Easy: "text-green-600 dark:text-green-400",
-    Medium: "text-yellow-600 dark:text-yellow-400",
-    Hard: "text-red-600 dark:text-red-400",
+    Easy: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
+    Medium: "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
+    Hard: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
   };
 
   useEffect(() => {
@@ -32,15 +46,38 @@ const PracticePage = () => {
     }
   };
 
-  const filteredProblems = problems.filter(
-    (problem) => filter === "All" || problem.difficulty === filter
-  );
+  // Filter and search logic
+  const filteredProblems = problems.filter((problem) => {
+    const matchesDifficulty = filter === "All" || problem.difficulty === filter;
+    const matchesSearch = 
+      problem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      problem.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      problem.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    return matchesDifficulty && matchesSearch;
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredProblems.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProblems = filteredProblems.slice(startIndex, endIndex);
+
+  // Reset to first page when filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchQuery]);
 
   const getAcceptanceRate = (stats) => {
     if (stats.totalSubmissions === 0) return 0;
     return Math.round(
       (stats.acceptedSubmissions / stats.totalSubmissions) * 100
     );
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (loading) {
@@ -78,18 +115,32 @@ const PracticePage = () => {
             </span>
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-            Sharpen your coding skills with our curated collection of DSA
-            problems
+            Master coding interviews with LeetCode Blind 75 - the most essential problems
           </p>
         </motion.div>
 
-        {/* Filter Tabs */}
+        {/* Search and Filters */}
         <motion.div
-          className="mb-8"
+          className="mb-8 space-y-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
         >
+          {/* Search Bar */}
+          <div className="max-w-md mx-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <input
+                type="text"
+                placeholder="Search problems, tags, or categories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+              />
+            </div>
+          </div>
+
+          {/* Filter Tabs */}
           <div className="flex flex-wrap justify-center gap-2">
             {difficulties.map((difficulty) => (
               <button
@@ -97,98 +148,104 @@ const PracticePage = () => {
                 onClick={() => setFilter(difficulty)}
                 className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
                   filter === difficulty
-                    ? "bg-orange-600 text-white shadow-lg"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    ? "bg-orange-600 text-white shadow-lg transform scale-105"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:scale-105"
                 }`}
               >
                 {difficulty}
               </button>
             ))}
           </div>
+
+          {/* Results Info */}
+          <div className="text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredProblems.length)} of {filteredProblems.length} problems
+              {searchQuery && (
+                <span className="ml-2">
+                  for "<span className="font-medium text-orange-600 dark:text-orange-400">{searchQuery}</span>"
+                </span>
+              )}
+            </p>
+          </div>
         </motion.div>
 
-        {/* Problems Grid */}
+        {/* Problems List */}
         <motion.div
-          className="grid gap-6"
+          className="space-y-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
         >
-          {filteredProblems.map((problem, index) => (
+          {currentProblems.map((problem, index) => (
             <motion.div
               key={problem._id}
-              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl hover:border-orange-300 dark:hover:border-orange-500 transition-all duration-300"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: index * 0.1 }}
-              whileHover={{ y: -5 }}
+              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-500 transition-all duration-300 group"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: index * 0.05 }}
+              whileHover={{ y: -2 }}
             >
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 {/* Problem Info */}
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Code className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                      {problem.title}
-                    </h3>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Code className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors truncate">
+                        {problem.title}
+                      </h3>
+                    </div>
                     <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      className={`px-2 py-1 rounded-lg text-xs font-medium border ${
                         difficultyColors[problem.difficulty]
-                      } bg-opacity-10 ${
-                        problem.difficulty === "Easy"
-                          ? "bg-green-100 dark:bg-green-900"
-                          : problem.difficulty === "Medium"
-                          ? "bg-yellow-100 dark:bg-yellow-900"
-                          : "bg-red-100 dark:bg-red-900"
                       }`}
                     >
                       {problem.difficulty}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-4 mb-4 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-4 mb-3 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
                     <div className="flex items-center gap-1">
-                      <Tag className="h-4 w-4" />
+                      <Tag className="h-3 w-3" />
                       <span>{problem.category}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <CheckCircle className="h-4 w-4" />
-                      <span>
-                        {getAcceptanceRate(problem.stats)}% Acceptance
-                      </span>
+                      <CheckCircle className="h-3 w-3" />
+                      <span>{getAcceptanceRate(problem.stats)}% Acceptance</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Users className="h-4 w-4" />
+                      <Users className="h-3 w-3" />
                       <span>{problem.stats.totalSubmissions} Submissions</span>
                     </div>
                   </div>
 
                   {/* Tags */}
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="flex flex-wrap gap-1">
                     {problem.tags.slice(0, 3).map((tag) => (
                       <span
                         key={tag}
-                        className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
+                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md text-xs"
                       >
                         {tag}
                       </span>
                     ))}
                     {problem.tags.length > 3 && (
-                      <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm">
-                        +{problem.tags.length - 3} more
+                      <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md text-xs">
+                        +{problem.tags.length - 3}
                       </span>
                     )}
                   </div>
                 </div>
 
                 {/* Action Button */}
-                <div className="lg:ml-6">
+                <div className="lg:ml-6 flex-shrink-0">
                   <Link
                     to={`/practice/${problem.slug}`}
-                    className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+                    className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg group-hover:scale-105"
                   >
                     <Code className="h-4 w-4" />
-                    Solve Problem
+                    Solve
                   </Link>
                 </div>
               </div>
@@ -196,8 +253,72 @@ const PracticePage = () => {
           ))}
         </motion.div>
 
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <motion.div
+            className="mt-12 flex justify-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+          >
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+
+              {/* Page Numbers */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 1 && page <= currentPage + 1)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                        currentPage === page
+                          ? "bg-orange-600 text-white shadow-lg"
+                          : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                } else if (
+                  page === currentPage - 2 ||
+                  page === currentPage + 2
+                ) {
+                  return (
+                    <span
+                      key={page}
+                      className="px-2 py-2 text-gray-400 dark:text-gray-600"
+                    >
+                      ...
+                    </span>
+                  );
+                }
+                return null;
+              })}
+
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Empty State */}
-        {filteredProblems.length === 0 && (
+        {filteredProblems.length === 0 && !loading && (
           <motion.div
             className="text-center py-12"
             initial={{ opacity: 0 }}
@@ -208,9 +329,17 @@ const PracticePage = () => {
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               No problems found
             </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              Try adjusting your filter to see more problems.
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              {searchQuery ? "Try adjusting your search query" : "Try adjusting your filter to see more problems."}
             </p>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="text-orange-600 dark:text-orange-400 hover:underline"
+              >
+                Clear search
+              </button>
+            )}
           </motion.div>
         )}
       </div>

@@ -5995,7 +5995,6 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 )}
 
                 {/* Whiteboard Tab Content - Removed, now opens in fullscreen */}
-
               </div>
             </motion.div>
           )}

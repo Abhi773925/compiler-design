@@ -3,13 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Video, 
-  VideoOff, 
-  Mic, 
-  MicOff, 
-  PhoneOff, 
-  Monitor, 
+import {
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  PhoneOff,
+  Monitor,
   MonitorOff,
   Users,
   Copy,
@@ -17,7 +17,7 @@ import {
   Settings,
   Maximize2,
   Minimize2,
-  ArrowLeft
+  ArrowLeft,
 } from "lucide-react";
 import io from "socket.io-client";
 
@@ -46,15 +46,15 @@ export default function VideoMeeting() {
   let [isFullscreen, setIsFullscreen] = useState(false);
   let [participantCount, setParticipantCount] = useState(1);
   let [copied, setCopied] = useState(false);
-  
+
   // Get username from authenticated user or generate a stable guest name
   const getUsername = () => {
     if (user?.username) return user.username;
     if (user?.name) return user.name;
-    if (user?.email) return user.email.split('@')[0];
+    if (user?.email) return user.email.split("@")[0];
     return `Guest_${Date.now().toString(36)}`;
   };
-  
+
   let [username, setUsername] = useState(getUsername());
 
   const videoRef = useRef([]);
@@ -65,30 +65,32 @@ export default function VideoMeeting() {
   // Dynamic layout based on participant count
   const getVideoLayoutClasses = () => {
     const totalParticipants = videos.length + 1; // +1 for local user
-    
+
     if (totalParticipants === 1) {
       return {
         container: "flex items-center justify-center h-full",
         localVideo: "w-full max-w-4xl h-96 lg:h-[500px]",
-        remoteVideos: ""
+        remoteVideos: "",
       };
     } else if (totalParticipants === 2) {
       return {
         container: "grid grid-cols-1 lg:grid-cols-2 gap-4 h-full",
         localVideo: "w-full h-64 lg:h-80",
-        remoteVideos: "w-full h-64 lg:h-80"
+        remoteVideos: "w-full h-64 lg:h-80",
       };
     } else if (totalParticipants <= 4) {
       return {
-        container: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 h-full",
+        container:
+          "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 h-full",
         localVideo: "w-full h-48 lg:h-64",
-        remoteVideos: "w-full h-48 lg:h-64"
+        remoteVideos: "w-full h-48 lg:h-64",
       };
     } else {
       return {
-        container: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 h-full",
+        container:
+          "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 h-full",
         localVideo: "w-full h-40 lg:h-48",
-        remoteVideos: "w-full h-40 lg:h-48"
+        remoteVideos: "w-full h-40 lg:h-48",
       };
     }
   };
@@ -107,7 +109,7 @@ export default function VideoMeeting() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy room ID:', err);
+      console.error("Failed to copy room ID:", err);
     }
   };
 
@@ -378,7 +380,7 @@ export default function VideoMeeting() {
 
       socketRef.current.on("user-left", (id) => {
         setVideos((videos) => videos.filter((video) => video.socketId !== id));
-        setParticipantCount(prev => prev - 1);
+        setParticipantCount((prev) => prev - 1);
       });
 
       socketRef.current.on("user-joined", (id, clients) => {
@@ -519,14 +521,16 @@ export default function VideoMeeting() {
       if (window.localStream) {
         window.localStream.getTracks().forEach((track) => track.stop());
       }
-      
+
       // Stop local video element tracks
       if (localVideoref.current && localVideoref.current.srcObject) {
-        localVideoref.current.srcObject.getTracks().forEach((track) => track.stop());
+        localVideoref.current.srcObject
+          .getTracks()
+          .forEach((track) => track.stop());
       }
 
       // Close all peer connections
-      Object.values(connections).forEach(connection => {
+      Object.values(connections).forEach((connection) => {
         if (connection.close) {
           connection.close();
         }
@@ -556,39 +560,70 @@ export default function VideoMeeting() {
   }, []);
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'} transition-colors duration-300`}>
+    <div
+      className={`min-h-screen ${
+        theme === "dark" ? "bg-gray-900" : "bg-gray-50"
+      } transition-colors duration-300`}
+    >
       {/* Header */}
-      <div className={`${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
+      <div
+        className={`${
+          theme === "dark"
+            ? "bg-gray-800 border-gray-700"
+            : "bg-white border-gray-200"
+        } border-b px-6 py-4`}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
-              <Video className={`w-6 h-6 ${theme === 'dark' ? 'text-orange-400' : 'text-orange-600'}`} />
-              <h1 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              <Video
+                className={`w-6 h-6 ${
+                  theme === "dark" ? "text-orange-400" : "text-orange-600"
+                }`}
+              />
+              <h1
+                className={`text-xl font-semibold ${
+                  theme === "dark" ? "text-white" : "text-gray-900"
+                }`}
+              >
                 Video Meeting
               </h1>
             </div>
             <div className="flex items-center space-x-2">
-              <Users className={`w-4 h-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} />
-              <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                {videos.length + 1} participant{videos.length !== 0 ? 's' : ''}
+              <Users
+                className={`w-4 h-4 ${
+                  theme === "dark" ? "text-gray-400" : "text-gray-500"
+                }`}
+              />
+              <span
+                className={`text-sm ${
+                  theme === "dark" ? "text-gray-400" : "text-gray-500"
+                }`}
+              >
+                {videos.length + 1} participant{videos.length !== 0 ? "s" : ""}
               </span>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             {/* Room ID with copy button */}
             <div className="flex items-center space-x-2">
-              <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                Room: <span className="text-orange-500 font-mono">{roomId}</span>
+              <span
+                className={`text-sm ${
+                  theme === "dark" ? "text-gray-400" : "text-gray-500"
+                }`}
+              >
+                Room:{" "}
+                <span className="text-orange-500 font-mono">{roomId}</span>
               </span>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={copyRoomId}
                 className={`p-2 rounded-md ${
-                  theme === 'dark' 
-                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-orange-400' 
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-orange-600'
+                  theme === "dark"
+                    ? "bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-orange-400"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-orange-600"
                 } transition-all duration-200`}
                 title="Copy Room ID"
               >
@@ -616,13 +651,17 @@ export default function VideoMeeting() {
               whileTap={{ scale: 0.95 }}
               onClick={toggleFullscreen}
               className={`p-2 rounded-md ${
-                theme === 'dark' 
-                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-orange-400' 
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-orange-600'
+                theme === "dark"
+                  ? "bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-orange-400"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-orange-600"
               } transition-all duration-200`}
               title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
             >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
             </motion.button>
 
             {/* Exit Meeting Button */}
@@ -644,16 +683,20 @@ export default function VideoMeeting() {
         <div className={getVideoLayoutClasses().container}>
           {/* Local Video */}
           <div className="relative group">
-            <div className={`relative ${getVideoLayoutClasses().localVideo} rounded-xl overflow-hidden ${
-              theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'
-            } shadow-lg`}>
+            <div
+              className={`relative ${
+                getVideoLayoutClasses().localVideo
+              } rounded-xl overflow-hidden ${
+                theme === "dark" ? "bg-gray-800" : "bg-gray-200"
+              } shadow-lg`}
+            >
               <video
                 ref={localVideoref}
                 autoPlay
                 muted
                 className="w-full h-full object-cover"
               />
-              
+
               {/* User info overlay */}
               <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-md text-sm">
                 {username} (You)
@@ -685,9 +728,13 @@ export default function VideoMeeting() {
               transition={{ duration: 0.3 }}
               className="relative group"
             >
-              <div className={`relative ${getVideoLayoutClasses().remoteVideos} rounded-xl overflow-hidden ${
-                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'
-              } shadow-lg`}>
+              <div
+                className={`relative ${
+                  getVideoLayoutClasses().remoteVideos
+                } rounded-xl overflow-hidden ${
+                  theme === "dark" ? "bg-gray-800" : "bg-gray-200"
+                } shadow-lg`}
+              >
                 <video
                   ref={(ref) => {
                     if (ref && videoItem.stream) {
@@ -697,7 +744,7 @@ export default function VideoMeeting() {
                   autoPlay
                   className="w-full h-full object-cover"
                 />
-                
+
                 <div className="absolute bottom-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-md text-sm">
                   Participant {index + 1}
                 </div>
@@ -708,9 +755,13 @@ export default function VideoMeeting() {
       </div>
 
       {/* Control Panel */}
-      <div className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 ${
-        theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-      } border rounded-2xl shadow-2xl px-6 py-4`}>
+      <div
+        className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 ${
+          theme === "dark"
+            ? "bg-gray-800 border-gray-700"
+            : "bg-white border-gray-200"
+        } border rounded-2xl shadow-2xl px-6 py-4`}
+      >
         <div className="flex items-center space-x-4">
           {/* Video Toggle */}
           <motion.button
@@ -718,13 +769,21 @@ export default function VideoMeeting() {
             whileTap={{ scale: 0.95 }}
             onClick={handleVideo}
             className={`p-4 rounded-xl transition-all duration-200 shadow-lg ${
-              video 
-                ? (theme === 'dark' ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white')
-                : (theme === 'dark' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-500 hover:bg-red-600 text-white')
+              video
+                ? theme === "dark"
+                  ? "bg-orange-600 hover:bg-orange-700 text-white"
+                  : "bg-orange-500 hover:bg-orange-600 text-white"
+                : theme === "dark"
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-red-500 hover:bg-red-600 text-white"
             }`}
             title={video ? "Turn off camera" : "Turn on camera"}
           >
-            {video ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+            {video ? (
+              <Video className="w-5 h-5" />
+            ) : (
+              <VideoOff className="w-5 h-5" />
+            )}
           </motion.button>
 
           {/* Audio Toggle */}
@@ -733,13 +792,21 @@ export default function VideoMeeting() {
             whileTap={{ scale: 0.95 }}
             onClick={handleAudio}
             className={`p-4 rounded-xl transition-all duration-200 shadow-lg ${
-              audio 
-                ? (theme === 'dark' ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white')
-                : (theme === 'dark' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-500 hover:bg-red-600 text-white')
+              audio
+                ? theme === "dark"
+                  ? "bg-orange-600 hover:bg-orange-700 text-white"
+                  : "bg-orange-500 hover:bg-orange-600 text-white"
+                : theme === "dark"
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-red-500 hover:bg-red-600 text-white"
             }`}
             title={audio ? "Mute microphone" : "Unmute microphone"}
           >
-            {audio ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+            {audio ? (
+              <Mic className="w-5 h-5" />
+            ) : (
+              <MicOff className="w-5 h-5" />
+            )}
           </motion.button>
 
           {/* Screen Share Toggle */}
@@ -749,13 +816,21 @@ export default function VideoMeeting() {
               whileTap={{ scale: 0.95 }}
               onClick={handleScreen}
               className={`p-4 rounded-xl transition-all duration-200 shadow-lg ${
-                screen 
-                  ? (theme === 'dark' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white')
-                  : (theme === 'dark' ? 'bg-gray-600 hover:bg-gray-700 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-600')
+                screen
+                  ? theme === "dark"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "bg-green-500 hover:bg-green-600 text-white"
+                  : theme === "dark"
+                  ? "bg-gray-600 hover:bg-gray-700 text-gray-300"
+                  : "bg-gray-200 hover:bg-gray-300 text-gray-600"
               }`}
               title={screen ? "Stop sharing screen" : "Share screen"}
             >
-              {screen ? <MonitorOff className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
+              {screen ? (
+                <MonitorOff className="w-5 h-5" />
+              ) : (
+                <Monitor className="w-5 h-5" />
+              )}
             </motion.button>
           )}
 

@@ -77,8 +77,8 @@ const HeroSection = () => {
   ];
   const navigate = useNavigate();
   const handlenavigate = () => {
-    navigate('/compiler');
-  }
+    navigate("/compiler");
+  };
   return (
     <>
       <div className="min-h-screen bg-white dark:bg-black relative overflow-hidden">
@@ -123,7 +123,7 @@ const HeroSection = () => {
                 <Button
                   size="lg"
                   className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 text-base font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-                  onClick={() => navigate('/practice')}
+                  onClick={() => navigate("/practice")}
                 >
                   Practice Problem
                   <Code className="ml-2 h-4 w-4" />

@@ -12753,7 +12753,7 @@ public class Solution {
 async function seedProblems() {
   try {
     // Connect to MongoDB
-    await mongoose.connect("mongodb+srv://anshkr1032_db_user:ua54qSrWsFdDkYnP@prepmate.nzhrzav.mongodb.net/?retryWrites=true&w=majority&appName=Prepmate");
+    await mongoose.connect("mongodb+srv://anshkr1032_db_user:ua54qSrWsFdDkYnP@prepmate.nzhrzav.mongodb.net/?retryWrites=true&w=majority&appName=Prepmate    ");
     console.log("Connected to MongoDB");
 
     // Clear existing problems

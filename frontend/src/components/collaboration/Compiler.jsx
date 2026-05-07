@@ -522,7 +522,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 const savedFile = await saveFileToDatabase(fileToSave);
                 console.log(
                   "File saved to database on switch:",
-                  files[activeFileId].name
+                  files[activeFileId].name,
                 );
 
                 // Update dbId if this was a new file
@@ -538,7 +538,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               } catch (dbError) {
                 console.error(
                   "Error saving to database on file switch:",
-                  dbError
+                  dbError,
                 );
               }
             }
@@ -559,9 +559,9 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                   version: fileVersionsRef.current[activeFileId] || 0,
                   timestamp: Date.now(),
                 }),
-              }
+              },
             ).catch((err) =>
-              console.warn("Could not save file to session:", err)
+              console.warn("Could not save file to session:", err),
             );
           }
 
@@ -654,7 +654,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       "🚀 Auto-save effect triggered. User logged in?",
       isUserLoggedIn(),
       "User:",
-      user
+      user,
     );
     if (!isUserLoggedIn()) return; // Use helper function
 
@@ -701,7 +701,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 content: currentContent,
                 timestamp: Date.now(),
               }),
-            }
+            },
           );
 
           // Also save to database for persistence
@@ -788,7 +788,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               setOutput(
                 `${
                   newCount - currentFiles
-                } new file(s) found in your saved files!`
+                } new file(s) found in your saved files!`,
               );
               setShowOutput(true);
               setTimeout(() => setShowOutput(false), 3000);
@@ -844,14 +844,14 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       try {
         // First check session storage for the most recently loaded file
         const lastLoadedFile = sessionStorage.getItem(
-          "last_loaded_github_file"
+          "last_loaded_github_file",
         );
         if (lastLoadedFile) {
           try {
             const fileData = JSON.parse(lastLoadedFile);
             console.log(
               "Found recently loaded GitHub file in session storage:",
-              fileData.name
+              fileData.name,
             );
 
             if (
@@ -866,7 +866,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 // 1 hour
                 console.log(
                   "Auto-restoring recent GitHub file:",
-                  fileData.name
+                  fileData.name,
                 );
 
                 // Set editor content
@@ -907,7 +907,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           try {
             const cachedFiles = JSON.parse(filesCache);
             console.log(
-              `Found ${Object.keys(cachedFiles).length} cached GitHub files`
+              `Found ${Object.keys(cachedFiles).length} cached GitHub files`,
             );
 
             // Do not automatically load these files, but keep them ready in case
@@ -960,24 +960,11 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     sql: "-- Write your SQL queries here\n",
   };
 
-  // Language mappings for Piston API (code execution)
-  const languageMappings = {
-    javascript: "javascript",
-    python: "python",
-    java: "java",
-    cpp: "c++",
-    c: "c",
-    csharp: "csharp",
-    typescript: "typescript",
-    go: "go",
-    rust: "rust",
-    php: "php",
-    ruby: "ruby",
-    kotlin: "kotlin",
-    swift: "swift",
-    r: "r",
-    sql: "sqlite3",
-  };
+  // Backend API URL - use localhost when running locally
+  const API_URL =
+    window.location.hostname === "localhost"
+      ? "http://localhost:5000/api/problems"
+      : "https://compiler-design.onrender.com/api/problems";
 
   // Language mappings for Monaco Editor (syntax highlighting)
   const monacoLanguageMappings = {
@@ -1103,64 +1090,29 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     const currentCode = monacoRef.current.getValue();
 
     try {
-      const response = await fetch("https://emkc.org/api/v2/piston/execute", {
+      const response = await fetch(`${API_URL}/execute`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          language: languageMappings[language] || language,
-          version: "*",
-          files: [
-            {
-              name: `main.${getFileExtension(language)}`,
-              content: currentCode,
-            },
-          ],
-          stdin: customInput,
-          args: [],
-          compile_timeout: 10000,
-          run_timeout: 3000,
-          compile_memory_limit: -1,
-          run_memory_limit: -1,
+          language: language,
+          code: currentCode,
+          input: customInput,
         }),
       });
 
       const data = await response.json();
 
-      // Handle different response scenarios
-      if (data.compile && data.compile.code !== 0) {
-        // Compilation failed
-        setOutput(
-          `Compilation Error:\n${
-            data.compile.stderr ||
-            data.compile.output ||
-            "Unknown compilation error"
-          }`
-        );
-      } else if (data.run) {
-        // Code executed (successfully or with runtime error)
-        let output = "";
-
-        if (data.run.stdout) {
-          output += data.run.stdout;
-        }
-
-        if (data.run.stderr) {
-          if (output) output += "\n\n--- Errors/Warnings ---\n";
-          output += data.run.stderr;
-        }
-
+      if (data.success) {
+        const output = data.output.trim();
         if (!output) {
-          output = "Program executed successfully with no output";
+          setOutput("Program executed successfully with no output");
+        } else {
+          setOutput(output);
         }
-
-        setOutput(output);
-      } else if (data.message) {
-        // API error message
-        setOutput(`Error: ${data.message}`);
       } else {
-        setOutput("No output generated");
+        setOutput(data.output || data.error || "Execution failed");
       }
     } catch (error) {
       setOutput(`Error: ${error.message || "Failed to execute code"}`);
@@ -1190,7 +1142,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       // For simplicity, we'll simulate a shareable link with encoded content
       // In a real app, you'd use a backend service to store and retrieve code
       const encodedContent = btoa(
-        JSON.stringify({ code: codeContent, language: lang })
+        JSON.stringify({ code: codeContent, language: lang }),
       );
       const shareableLink = `${
         window.location.origin
@@ -1231,13 +1183,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     try {
       // Try to get file from localStorage cache
       const filesCache = JSON.parse(
-        localStorage.getItem("github_files_cache") || "{}"
+        localStorage.getItem("github_files_cache") || "{}",
       );
       const cachedFile = filesCache[fileSha];
 
       if (!cachedFile || !cachedFile.content) {
         setOutput(
-          "Could not find the cached file. Try loading it from GitHub again."
+          "Could not find the cached file. Try loading it from GitHub again.",
         );
         setShowOutput(true);
         return;
@@ -1330,7 +1282,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       console.log("Loading GitHub file:", fileData.name);
       console.log(
         "Content length:",
-        fileData.content ? fileData.content.length : "No content"
+        fileData.content ? fileData.content.length : "No content",
       );
 
       if (!fileData.content) {
@@ -1359,7 +1311,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       // Store in localStorage for persistence
       try {
         const fileCache = JSON.parse(
-          localStorage.getItem("github_files_cache") || "{}"
+          localStorage.getItem("github_files_cache") || "{}",
         );
         fileCache[fileData.sha] = {
           ...githubFile,
@@ -1374,7 +1326,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         const trimmedCache = Object.fromEntries(sortedFiles);
         localStorage.setItem(
           "github_files_cache",
-          JSON.stringify(trimmedCache)
+          JSON.stringify(trimmedCache),
         );
         console.log("File cached in localStorage");
       } catch (cacheError) {
@@ -1407,7 +1359,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           } catch (retryError) {
             console.error(
               "Editor content update failed even with delay:",
-              retryError
+              retryError,
             );
           }
         }, 100);
@@ -1554,14 +1506,14 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
         if (!isConnected) {
           console.warn(
-            `Connection timeout with ${userId}: state=${pc.iceConnectionState}, gathering=${pc.iceGatheringState}`
+            `Connection timeout with ${userId}: state=${pc.iceConnectionState}, gathering=${pc.iceGatheringState}`,
           );
 
           // Check if this peer is still in the room
           const isPeerInRoom = roomUsers.some((user) => user.id === userId);
           if (!isPeerInRoom) {
             console.log(
-              `Peer ${userId} is no longer in the room, cleaning up stale connection`
+              `Peer ${userId} is no longer in the room, cleaning up stale connection`,
             );
             cleanupPeerConnection(userId);
             return;
@@ -1570,7 +1522,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           if (isProgressing) {
             // Still making progress, extend timeout
             console.log(
-              `Connection with ${userId} is still negotiating, extending timeout`
+              `Connection with ${userId} is still negotiating, extending timeout`,
             );
 
             // Give it a bit more time if it's actively negotiating
@@ -1582,19 +1534,19 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 pc.iceConnectionState !== "completed"
               ) {
                 console.warn(
-                  `Extended timeout reached for connection with ${userId}`
+                  `Extended timeout reached for connection with ${userId}`,
                 );
 
                 // If we're the initiator, try a forced reconnection
                 if (isInitiator) {
                   console.log(
-                    `Attempting forced reconnection with ${userId} after timeout`
+                    `Attempting forced reconnection with ${userId} after timeout`,
                   );
 
                   // Check if room still has an active call
                   if (!roomsWithActiveCalls.current.has(roomId)) {
                     console.log(
-                      `No active call in room ${roomId}, skipping reconnection attempt`
+                      `No active call in room ${roomId}, skipping reconnection attempt`,
                     );
                     cleanupPeerConnection(userId);
                     return;
@@ -1625,7 +1577,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                                 roomUsers.some((user) => user.id === userId)
                               ) {
                                 console.log(
-                                  `Creating new connection with ${userId} after ICE restart failure`
+                                  `Creating new connection with ${userId} after ICE restart failure`,
                                 );
 
                                 // Create a new connection with the same screen sharing state if needed
@@ -1635,7 +1587,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                                     localStream
                                       .getVideoTracks()
                                       .some((track) =>
-                                        track.label.includes("screen")
+                                        track.label.includes("screen"),
                                       ));
 
                                 const screenTrack = hasScreenShare
@@ -1663,7 +1615,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                   setTimeout(() => {
                     if (roomUsers.some((user) => user.id === userId)) {
                       console.log(
-                        `Creating new connection with ${userId} after timeout`
+                        `Creating new connection with ${userId} after timeout`,
                       );
 
                       // Create a new connection with the same screen sharing state if needed
@@ -1682,15 +1634,15 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                         (e) =>
                           console.error(
                             `Failed to create new connection after timeout:`,
-                            e
-                          )
+                            e,
+                          ),
                       );
                     }
                   }, 1000);
                 } else {
                   // Non-initiators should wait for initiator to retry
                   console.log(
-                    `Connection timeout as non-initiator, waiting for retry from ${userId}`
+                    `Connection timeout as non-initiator, waiting for retry from ${userId}`,
                   );
                 }
               }
@@ -1701,7 +1653,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           } else {
             // Not making progress and not connected, try recovery
             console.log(
-              `Connection with ${userId} stalled, attempting recovery`
+              `Connection with ${userId} stalled, attempting recovery`,
             );
 
             // If we're the initiator, trigger a fresh connection
@@ -1712,11 +1664,11 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               // Check if user is still in room before recreating connection
               if (roomUsers.some((user) => user.id === userId)) {
                 console.log(
-                  `Creating new connection with ${userId} after stalled negotiation`
+                  `Creating new connection with ${userId} after stalled negotiation`,
                 );
                 setTimeout(() => {
                   createPeerConnection(userId, true).catch((e) =>
-                    console.error(`Failed to create new connection:`, e)
+                    console.error(`Failed to create new connection:`, e),
                   );
                 }, 1000);
               }
@@ -1724,7 +1676,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           }
         } else {
           console.log(
-            `Connection with ${userId} established successfully within timeout period`
+            `Connection with ${userId} established successfully within timeout period`,
           );
         }
       }
@@ -1738,11 +1690,11 @@ const Compiler = ({ roomId, userName: propUserName }) => {
   const createPeerConnection = async (
     userId,
     isInitiator,
-    screenTrack = null
+    screenTrack = null,
   ) => {
     try {
       console.log(
-        `Creating peer connection with ${userId}, initiator: ${isInitiator}`
+        `Creating peer connection with ${userId}, initiator: ${isInitiator}`,
       );
 
       // Build ICE servers (including optional TURN) with connection options
@@ -1768,7 +1720,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       // Enhanced Connection monitoring with more extensive logging and recovery
       pc.oniceconnectionstatechange = () => {
         console.log(
-          `ICE connection state with ${userId}: ${pc.iceConnectionState}`
+          `ICE connection state with ${userId}: ${pc.iceConnectionState}`,
         );
 
         // Monitor specific connection states for troubleshooting
@@ -1783,7 +1735,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
           case "disconnected":
             console.log(
-              `ICE connection disconnected with ${userId}, scheduling debounced restart check`
+              `ICE connection disconnected with ${userId}, scheduling debounced restart check`,
             );
             // Debounced reconnect: if remains disconnected for > 3s, try gentle renegotiation
             clearTimeout(pc._disconnectedTimer);
@@ -1796,7 +1748,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               try {
                 if (isInitiator) {
                   console.log(
-                    `Still disconnected with ${userId}, attempting gentle renegotiation`
+                    `Still disconnected with ${userId}, attempting gentle renegotiation`,
                   );
                   const offer = await pc.createOffer({
                     offerToReceiveAudio: true,
@@ -1823,7 +1775,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             if (isInitiator && pc._reconnectAttempts < 3 && pc._hasConnected) {
               pc._reconnectAttempts++;
               console.log(
-                `Attempting ICE restart with ${userId}, attempt #${pc._reconnectAttempts}`
+                `Attempting ICE restart with ${userId}, attempt #${pc._reconnectAttempts}`,
               );
 
               // Attempt ICE restart after a delay proportional to attempt number
@@ -1856,13 +1808,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 } catch (error) {
                   console.error(
                     `ICE restart attempt failed with ${userId}:`,
-                    error
+                    error,
                   );
 
                   // If this was our last attempt, clean up the connection
                   if (pc._reconnectAttempts >= 3) {
                     console.log(
-                      `Maximum reconnection attempts reached for ${userId}, cleaning up`
+                      `Maximum reconnection attempts reached for ${userId}, cleaning up`,
                     );
                     cleanupPeerConnection(userId);
 
@@ -1872,7 +1824,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                       isInitiator
                     ) {
                       console.log(
-                        `Creating new connection with ${userId} after failed restarts`
+                        `Creating new connection with ${userId} after failed restarts`,
                       );
                       // We need to create a new peer connection from scratch
                       setTimeout(() => {
@@ -1880,8 +1832,8 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                           (e) =>
                             console.error(
                               `Failed to create new connection with ${userId}:`,
-                              e
-                            )
+                              e,
+                            ),
                         );
                       }, 1500);
                     }
@@ -1891,13 +1843,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             } else if (!pc._hasConnected) {
               // If connection never established successfully, clean up immediately
               console.log(
-                `Connection with ${userId} never established, cleaning up`
+                `Connection with ${userId} never established, cleaning up`,
               );
               cleanupPeerConnection(userId);
             } else if (pc._reconnectAttempts >= 3) {
               // Maximum retry attempts reached
               console.log(
-                `Maximum reconnection attempts reached for ${userId}, cleaning up`
+                `Maximum reconnection attempts reached for ${userId}, cleaning up`,
               );
               cleanupPeerConnection(userId);
             }
@@ -1911,13 +1863,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               setTimeout(() => {
                 if (!peerConnections.current[userId]) {
                   console.log(
-                    `Recreating connection with ${userId} after close`
+                    `Recreating connection with ${userId} after close`,
                   );
                   createPeerConnection(userId, true, screenTrack).catch((e) =>
                     console.error(
                       `Failed to recreate connection with ${userId}:`,
-                      e
-                    )
+                      e,
+                    ),
                   );
                 }
               }, 2000);
@@ -1929,7 +1881,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       // Monitor ICE gathering process
       pc.onicegatheringstatechange = () => {
         console.log(
-          `ICE gathering state with ${userId}: ${pc.iceGatheringState}`
+          `ICE gathering state with ${userId}: ${pc.iceGatheringState}`,
         );
 
         if (pc.iceGatheringState === "complete") {
@@ -1944,13 +1896,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 peerConnections.current[userId] === pc
               ) {
                 console.warn(
-                  `Connection with ${userId} taking too long to establish`
+                  `Connection with ${userId} taking too long to establish`,
                 );
 
                 // Inform user that connection might be having issues
                 if (isInitiator) {
                   setOutput(
-                    `Connection with peer is taking longer than expected. This might be due to network restrictions.`
+                    `Connection with peer is taking longer than expected. This might be due to network restrictions.`,
                   );
                   setShowOutput(true);
                   setTimeout(() => setShowOutput(false), 5000);
@@ -2002,7 +1954,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             } catch (e) {
               console.warn(
                 `Visibility renegotiation failed with ${userId}:`,
-                e
+                e,
               );
             }
           }
@@ -2044,18 +1996,18 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           console.log(`Adding screen track for user ${userId}`);
           pc.addTrack(screenTrack, screenStream);
           console.log(
-            `Added screen track successfully to connection with ${userId}`
+            `Added screen track successfully to connection with ${userId}`,
           );
         } catch (trackError) {
           console.error(
             `Error adding screen track to connection with ${userId}:`,
-            trackError
+            trackError,
           );
 
           // Try an alternative method if standard addTrack fails
           try {
             console.log(
-              `Trying alternate method to add screen track for ${userId}`
+              `Trying alternate method to add screen track for ${userId}`,
             );
             // Create a new transceiver for the track
             pc.addTransceiver(screenTrack, { streams: [screenStream] });
@@ -2063,7 +2015,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           } catch (altError) {
             console.error(
               `Alternative screen track addition also failed:`,
-              altError
+              altError,
             );
             // Continue without screen track - at least try to establish connection
           }
@@ -2073,28 +2025,28 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         for (const track of localStream.current.getTracks()) {
           try {
             console.log(
-              `Adding ${track.kind} track to peer connection with ${userId}`
+              `Adding ${track.kind} track to peer connection with ${userId}`,
             );
             pc.addTrack(track, localStream.current);
           } catch (trackError) {
             console.error(
               `Error adding ${track.kind} track to connection with ${userId}:`,
-              trackError
+              trackError,
             );
 
             // Try alternative approach if standard method fails
             try {
               console.log(
-                `Trying alternate method to add ${track.kind} track for ${userId}`
+                `Trying alternate method to add ${track.kind} track for ${userId}`,
               );
               pc.addTransceiver(track, { streams: [localStream.current] });
               console.log(
-                `Added ${track.kind} track via transceiver for ${userId}`
+                `Added ${track.kind} track via transceiver for ${userId}`,
               );
             } catch (altError) {
               console.error(
                 `Alternative track addition also failed for ${track.kind}:`,
-                altError
+                altError,
               );
               // Continue with other tracks
             }
@@ -2113,13 +2065,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             "Track kind:",
             event.track.kind,
             "Stream ID:",
-            event.streams[0]?.id
+            event.streams[0]?.id,
           );
 
           const stream = event.streams[0];
           if (!stream) {
             console.warn(
-              `Received track without stream from ${userId}, ignoring`
+              `Received track without stream from ${userId}, ignoring`,
             );
             return;
           }
@@ -2143,7 +2095,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               pc.connectionState === "connected"
             ) {
               console.log(
-                `Video track ended unexpectedly, may attempt to recover from ${userId}`
+                `Video track ended unexpectedly, may attempt to recover from ${userId}`,
               );
 
               // Signal to other peer they might need to restart video
@@ -2198,13 +2150,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                         videoElement
                           .requestPictureInPicture()
                           .catch((e) =>
-                            console.log("PiP not available or allowed:", e)
+                            console.log("PiP not available or allowed:", e),
                           );
                       }
                     }
                   })
                   .catch((e) =>
-                    console.log("Could not auto-play video for PiP:", e)
+                    console.log("Could not auto-play video for PiP:", e),
                   );
               };
               document.body.appendChild(videoElement);
@@ -2257,7 +2209,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           console.log(
-            `Generated ICE candidate for ${userId} (${event.candidate.protocol}/${event.candidate.type})`
+            `Generated ICE candidate for ${userId} (${event.candidate.protocol}/${event.candidate.type})`,
           );
 
           // Send candidate to peer with retry mechanism for important candidates
@@ -2270,7 +2222,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               });
             } else {
               console.warn(
-                `Socket not available to send ICE candidate to ${userId}`
+                `Socket not available to send ICE candidate to ${userId}`,
               );
             }
           };
@@ -2284,7 +2236,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             setTimeout(() => {
               if (pc.iceConnectionState === "checking" && socketRef.current) {
                 console.log(
-                  `Resending relay ICE candidate to ${userId} as connection still checking`
+                  `Resending relay ICE candidate to ${userId} as connection still checking`,
                 );
                 sendCandidate();
               }
@@ -2292,7 +2244,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           }
         } else {
           console.log(
-            `ICE candidate gathering complete for connection with ${userId}`
+            `ICE candidate gathering complete for connection with ${userId}`,
           );
         }
       };
@@ -2320,7 +2272,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
           case "disconnected":
             console.log(
-              `Connection disconnected with ${userId}, monitoring for recovery`
+              `Connection disconnected with ${userId}, monitoring for recovery`,
             );
 
             // Start a timer to attempt reconnection if the state doesn't fix itself
@@ -2332,7 +2284,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                     pc.connectionState === "disconnected"
                   ) {
                     console.log(
-                      `Connection still disconnected with ${userId} after waiting, attempting reconnection`
+                      `Connection still disconnected with ${userId} after waiting, attempting reconnection`,
                     );
 
                     // Create a new offer with ICE restart to re-establish connection
@@ -2363,7 +2315,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                     pc.connectionState === "failed"
                   ) {
                     console.log(
-                      `Attempting connection recovery with ${userId} after failed reconnection`
+                      `Attempting connection recovery with ${userId} after failed reconnection`,
                     );
 
                     // Mark this connection for garbage collection
@@ -2374,10 +2326,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                       setTimeout(() => {
                         if (roomUsers.some((user) => user.id === userId)) {
                           console.log(
-                            `Creating new connection with ${userId} after reconnection failures`
+                            `Creating new connection with ${userId} after reconnection failures`,
                           );
                           createPeerConnection(userId, true).catch((e) =>
-                            console.error(`Failed to create new connection:`, e)
+                            console.error(
+                              `Failed to create new connection:`,
+                              e,
+                            ),
                           );
                         }
                       }, 1000);
@@ -2390,14 +2345,14 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
           case "failed":
             console.error(
-              `Connection failed with ${userId}, attempting recovery`
+              `Connection failed with ${userId}, attempting recovery`,
             );
 
             if (isInitiator && pc._reconnectAttempts < 2) {
               // Attempt ICE restart
               pc._reconnectAttempts++;
               console.log(
-                `Attempting connection recovery for failed state, attempt #${pc._reconnectAttempts}`
+                `Attempting connection recovery for failed state, attempt #${pc._reconnectAttempts}`,
               );
 
               setTimeout(async () => {
@@ -2422,7 +2377,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 } catch (error) {
                   console.error(
                     `Recovery attempt for failed connection failed:`,
-                    error
+                    error,
                   );
                   cleanupPeerConnection(userId);
                 }
@@ -2430,7 +2385,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             } else {
               // Clean up failed connection if we've exceeded retry attempts
               console.log(
-                `Maximum recovery attempts reached, cleaning up connection with ${userId}`
+                `Maximum recovery attempts reached, cleaning up connection with ${userId}`,
               );
               cleanupPeerConnection(userId);
 
@@ -2439,7 +2394,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 roomUsers.find((user) => user.id === userId)?.name ||
                 "A participant";
               setOutput(
-                `Connection with ${peerName} was lost. They may need to refresh their page.`
+                `Connection with ${peerName} was lost. They may need to refresh their page.`,
               );
               setShowOutput(true);
               setTimeout(() => setShowOutput(false), 4000);
@@ -2488,7 +2443,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 const codecs = RTCRtpSender.getCapabilities("audio").codecs;
                 // Prioritize Opus for better audio quality
                 const preferredCodecs = codecs.filter(
-                  (c) => c.mimeType.toLowerCase() === "audio/opus"
+                  (c) => c.mimeType.toLowerCase() === "audio/opus",
                 );
 
                 if (preferredCodecs.length > 0) {
@@ -2502,7 +2457,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               } catch (codecError) {
                 console.warn(
                   `Could not set audio codec preferences:`,
-                  codecError
+                  codecError,
                 );
               }
             }
@@ -2531,14 +2486,14 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                     (c) =>
                       c.mimeType.toLowerCase() === "video/vp9" ||
                       c.mimeType.toLowerCase() === "video/h264" ||
-                      c.mimeType.toLowerCase() === "video/vp8"
+                      c.mimeType.toLowerCase() === "video/vp8",
                   );
                 } else {
                   // For less powerful devices, prefer H.264, then VP8 (avoid VP9)
                   preferredCodecs = codecs.filter(
                     (c) =>
                       c.mimeType.toLowerCase() === "video/h264" ||
-                      c.mimeType.toLowerCase() === "video/vp8"
+                      c.mimeType.toLowerCase() === "video/vp8",
                   );
                 }
 
@@ -2553,7 +2508,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               } catch (codecError) {
                 console.warn(
                   `Could not set video codec preferences:`,
-                  codecError
+                  codecError,
                 );
               }
             }
@@ -2575,7 +2530,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         } catch (sdpError) {
           console.error(`Error setting local description:`, sdpError);
           throw new Error(
-            `Failed to set local description: ${sdpError.message}`
+            `Failed to set local description: ${sdpError.message}`,
           );
         }
       }
@@ -2602,14 +2557,14 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             // Only for connections older than 30s
 
             console.log(
-              `Health check: Connection with ${userId} is in ${pc.connectionState} state`
+              `Health check: Connection with ${userId} is in ${pc.connectionState} state`,
             );
 
             // If we've been disconnected/failed for too long with no recovery,
             // force recreation of the connection
             if (isInitiator && pc._reconnectAttempts >= 3) {
               console.log(
-                `Health check: Connection with ${userId} needs recreation`
+                `Health check: Connection with ${userId} needs recreation`,
               );
 
               // Clean up existing connection
@@ -2618,13 +2573,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               // Create new connection if user is still in the room
               if (roomUsers.some((user) => user.id === userId)) {
                 console.log(
-                  `Health check: Creating new connection with ${userId}`
+                  `Health check: Creating new connection with ${userId}`,
                 );
                 createPeerConnection(userId, true, screenTrack).catch((e) =>
                   console.error(
                     `Failed to create new connection in health check:`,
-                    e
-                  )
+                    e,
+                  ),
                 );
               }
             }
@@ -2830,7 +2785,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       }
 
       console.log(
-        `Completed cleanup of all connection resources for ${userId}`
+        `Completed cleanup of all connection resources for ${userId}`,
       );
 
       // If this was the last connection and we still have local media,
@@ -3030,7 +2985,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         });
         localStorage.setItem(
           `room_${roomId}_files`,
-          JSON.stringify(filesToSave)
+          JSON.stringify(filesToSave),
         );
         localStorage.setItem(`room_${roomId}_activeFile`, activeFileId);
       } catch (error) {
@@ -3095,12 +3050,12 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             if (monacoRef.current) {
               isRemoteChange.current = true;
               monacoRef.current.setValue(
-                parsedFiles[savedActiveFile].content || ""
+                parsedFiles[savedActiveFile].content || "",
               );
               isRemoteChange.current = false;
               console.log(
                 "Restored file content:",
-                parsedFiles[savedActiveFile].name
+                parsedFiles[savedActiveFile].name,
               );
             } else {
               // Retry after a short delay if editor not ready
@@ -3119,7 +3074,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             if (monacoRef.current) {
               isRemoteChange.current = true;
               monacoRef.current.setValue(
-                parsedFiles[firstFileId].content || ""
+                parsedFiles[firstFileId].content || "",
               );
               isRemoteChange.current = false;
             } else {
@@ -3133,7 +3088,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         setOutput(
           `Restored ${
             Object.keys(parsedFiles).length
-          } file(s) from previous session`
+          } file(s) from previous session`,
         );
         setShowOutput(true);
         setTimeout(() => setShowOutput(false), 2000);
@@ -3295,7 +3250,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     socketRef.current.on("connect", () => {
       console.log(
         "Socket connected successfully with ID:",
-        socketRef.current.id
+        socketRef.current.id,
       );
 
       // Reset connection attempts on successful connection
@@ -3364,11 +3319,11 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         setOutput("Connection error. Attempting to reconnect...");
       } else if (connectionAttempts <= 7) {
         setOutput(
-          "Still trying to reconnect... Check your internet connection."
+          "Still trying to reconnect... Check your internet connection.",
         );
       } else {
         setOutput(
-          "Connection problems persist. You might need to refresh the page."
+          "Connection problems persist. You might need to refresh the page.",
         );
       }
       setShowOutput(true);
@@ -3466,7 +3421,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
     socketRef.current.on("reconnect_failed", () => {
       console.error("Socket failed to reconnect after maximum attempts");
       setOutput(
-        "Failed to reconnect. Please refresh the page to continue collaborating."
+        "Failed to reconnect. Please refresh the page to continue collaborating.",
       );
       setShowOutput(true);
     });
@@ -3477,7 +3432,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
       // Show notification about active call
       setOutput(
-        `There's an active video call in this room. Would you like to join?`
+        `There's an active video call in this room. Would you like to join?`,
       );
       setShowOutput(true);
 
@@ -3604,7 +3559,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       "roomCallStatus",
       ({ hasActiveCall, participantCount, participants }) => {
         console.log(
-          `Room call status: active=${hasActiveCall}, participants=${participantCount}`
+          `Room call status: active=${hasActiveCall}, participants=${participantCount}`,
         );
 
         // Update our local tracking of active calls
@@ -3616,7 +3571,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             setOutput(
               `There's an active video call in this room with ${participantCount} participant${
                 participantCount !== 1 ? "s" : ""
-              }. Would you like to join?`
+              }. Would you like to join?`,
             );
             setShowOutput(true);
 
@@ -3632,7 +3587,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         } else {
           roomsWithActiveCalls.current.delete(roomId);
         }
-      }
+      },
     );
 
     // Call participants count handlers have been removed
@@ -3692,7 +3647,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           setCode(content);
           console.log(`File ${fileId} updated by ${userName}`);
         }
-      }
+      },
     );
 
     // Listen for language updates from other users
@@ -3701,7 +3656,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       ({ language: newLanguage, userName: senderName }) => {
         setLanguage(newLanguage);
         console.log(`Language changed to ${newLanguage} by ${senderName}`);
-      }
+      },
     );
 
     // Request current code state when joining
@@ -3731,7 +3686,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           setLanguage(receivedLanguage);
           console.log("Received current code state from another user");
         }
-      }
+      },
     );
 
     // Screen share event handlers have been removed
@@ -3822,7 +3777,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             // to avoid showing multiple notifications for the same caller
             if (incomingCall && incomingCall.from === userId) {
               console.log(
-                "Already showing incoming call for this user, ignoring duplicate"
+                "Already showing incoming call for this user, ignoring duplicate",
               );
               return;
             }
@@ -3838,7 +3793,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
             // Show prominent notification in the UI
             setOutput(
-              `📞 Incoming video call from ${callerName}! Click "Accept" to join the meeting.`
+              `📞 Incoming video call from ${callerName}! Click "Accept" to join the meeting.`,
             );
             setShowOutput(true);
 
@@ -3862,7 +3817,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                   .catch((err) => {
                     console.log(
                       "Could not play ringtone (autoplay restrictions):",
-                      err
+                      err,
                     );
                     // Try to play on next user interaction
                     document.addEventListener(
@@ -3873,7 +3828,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                           .catch((e) => console.log("Still couldn't play:", e));
                         document.removeEventListener("click", playOnClick);
                       },
-                      { once: true }
+                      { once: true },
                     );
                   });
               });
@@ -3888,8 +3843,9 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             // Function to try a fallback tone using Web Audio API
             function tryFallbackTone() {
               try {
-                const audioCtx = new (window.AudioContext ||
-                  window.webkitAudioContext)();
+                const audioCtx = new (
+                  window.AudioContext || window.webkitAudioContext
+                )();
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
 
@@ -3983,7 +3939,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 peerConnections.current[userId].connectionState === "connected"
               ) {
                 console.log(
-                  `Already connected to ${callerName}, skipping auto-accept`
+                  `Already connected to ${callerName}, skipping auto-accept`,
                 );
                 return;
               }
@@ -4001,16 +3957,16 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             } catch (error) {
               console.error(
                 `Error auto-accepting call from ${callerName}:`,
-                error
+                error,
               );
               setOutput(
-                `Could not connect to ${callerName}. Try refreshing the page.`
+                `Could not connect to ${callerName}. Try refreshing the page.`,
               );
               setShowOutput(true);
             }
           }
         }
-      }
+      },
     );
 
     // Handle user ready for screen share
@@ -4025,7 +3981,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           // Create peer connection for screen sharing
           const pc = await createPeerConnection(userId, true, screenTrack);
           console.log(
-            `Created peer connection for screen share with ${userId}`
+            `Created peer connection for screen share with ${userId}`,
           );
 
           // Tag this connection as a screen share connection
@@ -4033,7 +3989,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         } catch (error) {
           console.error(
             `Error creating screen share connection with ${userId}:`,
-            error
+            error,
           );
           setOutput("Screen sharing connection failed. Try again.");
           setShowOutput(true);
@@ -4053,7 +4009,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
           // Show notification about existing participants
           setOutput(
-            `${participants.length} users already in call. Connecting...`
+            `${participants.length} users already in call. Connecting...`,
           );
           setShowOutput(true);
 
@@ -4071,16 +4027,16 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               console.log(
                 `Creating connection with existing participant ${i + 1}/${
                   participants.length
-                }: ${participant.userName}`
+                }: ${participant.userName}`,
               );
               await createPeerConnection(participant.userId, true);
               console.log(
-                `Created peer connection with ${participant.userName}`
+                `Created peer connection with ${participant.userName}`,
               );
             } catch (error) {
               console.error(
                 `Failed to connect to ${participant.userName}:`,
-                error
+                error,
               );
 
               // Continue with the next participant even if this one fails
@@ -4089,29 +4045,32 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           }
 
           // Final connection status message
-          setTimeout(() => {
-            const activeConnections = Object.values(
-              peerConnections.current
-            ).filter(
-              (pc) =>
-                pc.connectionState === "connected" ||
-                pc.iceConnectionState === "connected"
-            ).length;
+          setTimeout(
+            () => {
+              const activeConnections = Object.values(
+                peerConnections.current,
+              ).filter(
+                (pc) =>
+                  pc.connectionState === "connected" ||
+                  pc.iceConnectionState === "connected",
+              ).length;
 
-            setOutput(
-              `Connected to ${activeConnections} out of ${participants.length} participants`
-            );
-            setShowOutput(true);
-            setTimeout(() => setShowOutput(false), 3000);
-          }, participants.length * 1000 + 1000); // Wait for connections to establish
+              setOutput(
+                `Connected to ${activeConnections} out of ${participants.length} participants`,
+              );
+              setShowOutput(true);
+              setTimeout(() => setShowOutput(false), 3000);
+            },
+            participants.length * 1000 + 1000,
+          ); // Wait for connections to establish
         }
-      }
+      },
     );
 
     // Handle WebRTC offer with enhanced reliability
     socketRef.current.on("webrtc-offer", async ({ offer, from, userName }) => {
       console.log(
-        `Received WebRTC offer from ${userName || "Unknown"} (${from})`
+        `Received WebRTC offer from ${userName || "Unknown"} (${from})`,
       );
 
       try {
@@ -4129,7 +4088,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             delete peerConnections.current[from];
           } else if (pc.signalingState !== "stable") {
             console.log(
-              `Received offer while in ${pc.signalingState} state, handling with rollback`
+              `Received offer while in ${pc.signalingState} state, handling with rollback`,
             );
 
             // Handle glare situation (both peers sending offers simultaneously)
@@ -4145,7 +4104,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               // If polite, rollback
               if (offerCollision) {
                 console.log(
-                  "Offer collision detected, rolling back as the polite peer"
+                  "Offer collision detected, rolling back as the polite peer",
                 );
 
                 try {
@@ -4155,7 +4114,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                   ]);
                 } catch (e) {
                   console.log(
-                    "Perfect negotiation rollback not supported, using alternative approach"
+                    "Perfect negotiation rollback not supported, using alternative approach",
                   );
                   // Fall back to recreating the connection
                   pc.close();
@@ -4163,7 +4122,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 }
               } else {
                 console.log(
-                  "Offer collision detected, ignoring as the impolite peer"
+                  "Offer collision detected, ignoring as the impolite peer",
                 );
                 return; // Ignore this offer, we'll stick with ours
               }
@@ -4203,7 +4162,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           pendingIceCandidates.current[from].length > 0
         ) {
           console.log(
-            `Applying ${pendingIceCandidates.current[from].length} pending ICE candidates for ${from}`
+            `Applying ${pendingIceCandidates.current[from].length} pending ICE candidates for ${from}`,
           );
 
           try {
@@ -4238,7 +4197,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 const audioCodecs =
                   RTCRtpSender.getCapabilities("audio").codecs;
                 const opusCodecs = audioCodecs.filter(
-                  (c) => c.mimeType.toLowerCase() === "audio/opus"
+                  (c) => c.mimeType.toLowerCase() === "audio/opus",
                 );
                 if (opusCodecs.length > 0) {
                   transceiver.setCodecPreferences([
@@ -4258,7 +4217,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                   (c) =>
                     c.mimeType.toLowerCase() === "video/vp9" ||
                     c.mimeType.toLowerCase() === "video/vp8" ||
-                    c.mimeType.toLowerCase() === "video/h264"
+                    c.mimeType.toLowerCase() === "video/h264",
                 );
                 if (preferredCodecs.length > 0) {
                   transceiver.setCodecPreferences([
@@ -4296,7 +4255,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         // Notify the user only if this was an expected connection
         if (incomingCall && incomingCall.from === from) {
           setOutput(
-            "Failed to establish connection. Try accepting the call again."
+            "Failed to establish connection. Try accepting the call again.",
           );
           setShowOutput(true);
           setIncomingCall(null); // Clear incoming call state
@@ -4315,14 +4274,14 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       "webrtc-answer",
       async ({ answer, from, userName }) => {
         console.log(
-          `Received WebRTC answer from ${userName || "Unknown"} (${from})`
+          `Received WebRTC answer from ${userName || "Unknown"} (${from})`,
         );
 
         try {
           const pc = peerConnections.current[from];
           if (!pc) {
             console.warn(
-              `No peer connection found for ${from}, can't process answer`
+              `No peer connection found for ${from}, can't process answer`,
             );
             return;
           }
@@ -4330,7 +4289,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           // Check signaling state
           if (pc.signalingState === "stable") {
             console.log(
-              `Peer connection with ${from} already in stable state, ignoring answer`
+              `Peer connection with ${from} already in stable state, ignoring answer`,
             );
             return;
           }
@@ -4342,7 +4301,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           } catch (sdpError) {
             console.error(
               `Error setting remote description for ${from}:`,
-              sdpError
+              sdpError,
             );
 
             // If it's an invalid state error, try a different approach
@@ -4365,7 +4324,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                     });
 
                     await peerConnections.current[from].setLocalDescription(
-                      newOffer
+                      newOffer,
                     );
                     socketRef.current.emit("webrtc-offer", {
                       offer: newOffer,
@@ -4374,13 +4333,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                     });
 
                     console.log(
-                      `Sent new offer to ${from} after invalid state`
+                      `Sent new offer to ${from} after invalid state`,
                     );
                   }
                 } catch (retryError) {
                   console.error(
                     `Recovery attempt failed for ${from}:`,
-                    retryError
+                    retryError,
                   );
                 }
               }, 1500);
@@ -4393,7 +4352,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             pendingIceCandidates.current[from].length > 0
           ) {
             console.log(
-              `Applying ${pendingIceCandidates.current[from].length} pending ICE candidates for ${from}`
+              `Applying ${pendingIceCandidates.current[from].length} pending ICE candidates for ${from}`,
             );
 
             for (const candidate of pendingIceCandidates.current[from]) {
@@ -4402,7 +4361,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               } catch (e) {
                 console.warn(
                   `Error applying pending ICE candidate for ${from}:`,
-                  e
+                  e,
                 );
               }
             }
@@ -4415,7 +4374,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
           if (error.name === "InvalidStateError") {
             console.log(
-              `Invalid state while setting remote description, resetting connection with ${from}`
+              `Invalid state while setting remote description, resetting connection with ${from}`,
             );
             cleanupPeerConnection(from);
 
@@ -4424,19 +4383,19 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               if (localStream.current) {
                 createPeerConnection(from, true)
                   .then(() =>
-                    console.log(`Recreated peer connection with ${from}`)
+                    console.log(`Recreated peer connection with ${from}`),
                   )
                   .catch((e) =>
                     console.error(
                       `Failed to recreate connection with ${from}:`,
-                      e
-                    )
+                      e,
+                    ),
                   );
               }
             }, 1500);
           }
         }
-      }
+      },
     );
 
     // Handle ICE candidates with improved handling and buffering
@@ -4450,7 +4409,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         // If we don't have a peer connection yet, store candidates for later
         if (!pc) {
           console.log(
-            `No peer connection for ${from} yet, storing ICE candidate for later`
+            `No peer connection for ${from} yet, storing ICE candidate for later`,
           );
 
           // Initialize array if needed
@@ -4466,7 +4425,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         // Check connection state
         if (pc.connectionState === "closed" || pc.signalingState === "closed") {
           console.warn(
-            `Connection with ${from} is closed, ignoring ICE candidate`
+            `Connection with ${from} is closed, ignoring ICE candidate`,
           );
           return;
         }
@@ -4477,7 +4436,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           pc.remoteDescription.type === null
         ) {
           console.log(
-            `Remote description not set for ${from} yet, storing ICE candidate`
+            `Remote description not set for ${from} yet, storing ICE candidate`,
           );
 
           // Initialize array if needed
@@ -4649,7 +4608,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               timestamp: Date.now(),
             }),
           }).catch((err) =>
-            console.warn("Could not save file to session:", err)
+            console.warn("Could not save file to session:", err),
           );
 
           // Update last saved timestamp
@@ -4785,7 +4744,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                 fileData.name
               }" has been saved to your account. You now have ${newCount} saved file${
                 newCount > 1 ? "s" : ""
-              }.`
+              }.`,
             );
             setShowOutput(true);
             setTimeout(() => setShowOutput(false), 3000);
@@ -4915,7 +4874,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
                 if (exists) {
                   return prev.map((f) =>
-                    f._id === savedFile._id ? savedFile : f
+                    f._id === savedFile._id ? savedFile : f,
                   );
                 } else {
                   return [...prev, savedFile];
@@ -4990,7 +4949,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       // Show different message depending on whether it was saved to database
       if (savedToDatabase) {
         setOutput(
-          `File "${file.name}" uploaded successfully and saved to your files!`
+          `File "${file.name}" uploaded successfully and saved to your files!`,
         );
       } else {
         setOutput(`File "${file.name}" uploaded successfully!`);
@@ -5035,7 +4994,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
       try {
         // Get all keys in localStorage that start with 'file_'
         const fileKeys = Object.keys(localStorage).filter((key) =>
-          key.startsWith("file_")
+          key.startsWith("file_"),
         );
 
         // Maximum age for temporary files (24 hours)
@@ -5157,7 +5116,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
         // Save to session storage as backup
         sessionStorage.setItem(
           `file_${activeFileId}`,
-          JSON.stringify(fileState)
+          JSON.stringify(fileState),
         );
         sessionStorage.setItem("last_active_file", activeFileId);
 
@@ -5204,7 +5163,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           const savedState = JSON.parse(
             localStorage.getItem(`file_${lastActiveFileId}`) ||
               sessionStorage.getItem(`file_${lastActiveFileId}`) ||
-              "{}"
+              "{}",
           );
 
           if (savedState.content) {
@@ -5382,12 +5341,12 @@ const Compiler = ({ roomId, userName: propUserName }) => {
 
                 // If the file already exists by ID, update it
                 const exists = currentFiles.some(
-                  (f) => f._id === savedFile._id
+                  (f) => f._id === savedFile._id,
                 );
 
                 if (exists) {
                   return currentFiles.map((f) =>
-                    f._id === savedFile._id ? savedFile : f
+                    f._id === savedFile._id ? savedFile : f,
                   );
                 } else {
                   return [...currentFiles, savedFile];
@@ -5405,7 +5364,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
               }));
 
               setOutput(
-                `File "${fileData.name}" loaded from GitHub and saved to your files.`
+                `File "${fileData.name}" loaded from GitHub and saved to your files.`,
               );
               setShowOutput(true);
 
@@ -5441,7 +5400,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                         : "";
 
                     setOutput(
-                      `File "${fileData.name}" has been saved! Check the "Saved Files" tab to see all your files.${countMessage}`
+                      `File "${fileData.name}" has been saved! Check the "Saved Files" tab to see all your files.${countMessage}`,
                     );
                     setShowOutput(true);
                     setTimeout(() => setShowOutput(false), 5000);
@@ -5453,13 +5412,13 @@ const Compiler = ({ roomId, userName: propUserName }) => {
           .catch((error) => {
             console.error("Error saving GitHub file to database:", error);
             setOutput(
-              `File "${fileData.name}" loaded from GitHub, but couldn't be saved to your files: ${error.message}`
+              `File "${fileData.name}" loaded from GitHub, but couldn't be saved to your files: ${error.message}`,
             );
             setShowOutput(true);
           });
       } else {
         setOutput(
-          `File "${fileData.name}" loaded from GitHub. Log in to save it to your files.`
+          `File "${fileData.name}" loaded from GitHub. Log in to save it to your files.`,
         );
         setShowOutput(true);
       }
@@ -5479,12 +5438,12 @@ const Compiler = ({ roomId, userName: propUserName }) => {
             },
             sha: fileData.sha,
             timestamp: new Date().toISOString(),
-          })
+          }),
         );
       } catch (cacheError) {
         console.warn(
           "Could not cache GitHub file in session storage:",
-          cacheError
+          cacheError,
         );
       }
 
@@ -5923,7 +5882,7 @@ const Compiler = ({ roomId, userName: propUserName }) => {
                                     {
                                       hour: "2-digit",
                                       minute: "2-digit",
-                                    }
+                                    },
                                   )}
                                 </span>
                               </div>

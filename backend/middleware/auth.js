@@ -12,15 +12,18 @@ const auth = async (req, res, next) => {
       });
     }
 
-    // Verify JWT token with enhanced validation
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "fallback_secret",
-      {
+    // Verify JWT token (flexible validation for backwards compatibility)
+    let decoded;
+    try {
+      // First try with issuer/audience validation
+      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret", {
         issuer: "prepmate-api",
         audience: "prepmate-client",
-      }
-    );
+      });
+    } catch (err) {
+      // Fallback: try without issuer/audience for older tokens
+      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+    }
 
     // Check if token is expired (additional check)
     const currentTime = Math.floor(Date.now() / 1000);

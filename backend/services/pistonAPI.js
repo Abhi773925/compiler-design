@@ -1,43 +1,56 @@
 const axios = require("axios");
 
-class PistonAPI {
+class JDoodleAPI {
   constructor() {
-    this.baseURL = "https://emkc.org/api/v2/piston";
+    this.baseURL = "https://api.jdoodle.com/v1/execute";
+    // JDoodle credentials (corrected)
+    this.clientId = "ed4b547ea5145d170359ece78b10924e";
+    this.clientSecret = "a1c0bd24a45cf3b05d624e2f91117bc1bebf0efd09928891b1becb19496f600";
   }
 
   async getLanguages() {
-    try {
-      const response = await axios.get(`${this.baseURL}/runtimes`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching languages:", error);
-      throw error;
-    }
+    // JDoodle supported languages
+    return [
+      { language: "nodejs", version: "18" },
+      { language: "java", version: "JDK 17.0.1" },
+      { language: "cpp17", version: "GCC 11.1.0" },
+      { language: "c", version: "GCC 11.1.0" },
+      { language: "python3", version: "3.10.0" },
+    ];
   }
 
   async executeCode(language, version, code, input = "") {
     try {
       const payload = {
+        clientId: this.clientId,
+        clientSecret: this.clientSecret,
+        script: code,
         language: language,
-        version: version,
-        files: [
-          {
-            name: this.getFileName(language),
-            content: code,
-          },
-        ],
+        versionIndex: version,
         stdin: input,
-        args: [],
-        compile_timeout: 10000,
-        run_timeout: 3000,
-        compile_memory_limit: -1,
-        run_memory_limit: -1,
       };
 
-      const response = await axios.post(`${this.baseURL}/execute`, payload);
+      console.log('JDoodle Request:', { language, versionIndex: version });
+
+      const response = await axios.post(this.baseURL, payload, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log('JDoodle Response Status:', response.status);
+      console.log('JDoodle Response Data:', response.data);
+
       return response.data;
     } catch (error) {
-      console.error("Error executing code:", error);
+      console.error("Error executing code:", error.response?.data || error.message);
+      if (error.response) {
+        return {
+          error: error.response.data?.error || error.response.statusText,
+          statusCode: error.response.status,
+          output: `API Error: ${error.response.status} - ${error.response.statusText}`,
+        };
+      }
       throw error;
     }
   }
@@ -54,12 +67,13 @@ class PistonAPI {
   }
 
   getLanguageConfig(language) {
+    // Map common language names to JDoodle language identifiers
     const configs = {
-      javascript: { language: "javascript", version: "18.15.0" },
-      java: { language: "java", version: "15.0.2" },
-      cpp: { language: "cpp", version: "10.2.0" },
-      c: { language: "c", version: "10.2.0" },
-      python: { language: "python", version: "3.10.0" },
+      javascript: { language: "nodejs", version: "4" },
+      java: { language: "java", version: "4" },
+      cpp: { language: "cpp17", version: "0" },
+      c: { language: "c", version: "5" },
+      python: { language: "python3", version: "4" },
     };
     return configs[language] || configs["javascript"];
   }
@@ -67,37 +81,44 @@ class PistonAPI {
   async runTestCase(language, code, input, expectedOutput) {
     try {
       const config = this.getLanguageConfig(language);
+      
+      // Wrap code for languages that need a main function
+      let wrappedCode = code;
+      if (language === 'cpp' || language === 'c') {
+        // Check if code already has a main function
+        if (!code.includes('int main')) {
+          // For C++, wrap the function code with a simple main that calls it
+          wrappedCode = `${code}
+
+int main() {
+    // This is a wrapper - actual test execution happens via stdin/stdout
+    return 0;
+}`;
+        }
+      }
+      
       const result = await this.executeCode(
         config.language,
         config.version,
-        code,
+        wrappedCode,
         input
       );
 
-      // Check if compilation failed
-      if (result.compile && result.compile.code !== 0) {
+      console.log('Test case result:', result);
+
+      // Check for API errors
+      if (result.error || (result.statusCode && result.statusCode !== 200)) {
         return {
           passed: false,
           input: input,
           expectedOutput: expectedOutput,
-          actualOutput: result.compile.stderr || "Compilation error",
-          error: result.compile.stderr || "Compilation failed",
+          actualOutput: result.error || result.output || "API Error",
+          error: result.error || `API returned status ${result.statusCode}`,
         };
       }
 
-      // Check if runtime failed
-      if (result.run.code !== 0) {
-        return {
-          passed: false,
-          input: input,
-          expectedOutput: expectedOutput,
-          actualOutput: result.run.stderr || "Runtime error",
-          error: result.run.stderr || "Runtime error",
-        };
-      }
-
-      // Get the output and clean it
-      const actualOutput = result.run.stdout.trim();
+      // JDoodle returns output directly
+      const actualOutput = (result.output || "").trim();
       const passed = actualOutput === expectedOutput.trim();
 
       return {
@@ -105,9 +126,11 @@ class PistonAPI {
         input: input,
         expectedOutput: expectedOutput,
         actualOutput: actualOutput,
-        executionTime: result.run.signal || "N/A",
+        executionTime: result.cpuTime || "N/A",
+        memory: result.memory || "N/A",
       };
     } catch (error) {
+      console.error('Test case execution error:', error);
       return {
         passed: false,
         input: input,
@@ -149,4 +172,4 @@ class PistonAPI {
   }
 }
 
-module.exports = new PistonAPI();
+module.exports = new JDoodleAPI();

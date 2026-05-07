@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { 
-  Clock, 
-  Users, 
-  CheckCircle, 
-  Trophy, 
-  Code, 
-  Tag, 
+import {
+  Clock,
+  Users,
+  CheckCircle,
+  Trophy,
+  Code,
+  Tag,
   Search,
   ChevronLeft,
   ChevronRight,
-  Filter
+  Filter,
 } from "lucide-react";
 import Navbar from "../components/layout/Navbar";
 
@@ -26,7 +26,8 @@ const PracticePage = () => {
   const difficulties = ["All", "Easy", "Medium", "Hard"];
   const difficultyColors = {
     Easy: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
-    Medium: "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
+    Medium:
+      "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
     Hard: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
   };
 
@@ -36,7 +37,12 @@ const PracticePage = () => {
 
   const fetchProblems = async () => {
     try {
-      const response = await fetch("https://compiler-design.onrender.com/api/problems");
+      const API_URL =
+        window.location.hostname === "localhost"
+          ? "http://localhost:5000"
+          : "https://compiler-design.onrender.com";
+
+      const response = await fetch(`${API_URL}/api/problems`);
       const data = await response.json();
       setProblems(data);
     } catch (error) {
@@ -49,11 +55,13 @@ const PracticePage = () => {
   // Filter and search logic
   const filteredProblems = problems.filter((problem) => {
     const matchesDifficulty = filter === "All" || problem.difficulty === filter;
-    const matchesSearch = 
+    const matchesSearch =
       problem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       problem.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      problem.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
+      problem.tags.some((tag) =>
+        tag.toLowerCase().includes(searchQuery.toLowerCase()),
+      );
+
     return matchesDifficulty && matchesSearch;
   });
 
@@ -71,13 +79,13 @@ const PracticePage = () => {
   const getAcceptanceRate = (stats) => {
     if (stats.totalSubmissions === 0) return 0;
     return Math.round(
-      (stats.acceptedSubmissions / stats.totalSubmissions) * 100
+      (stats.acceptedSubmissions / stats.totalSubmissions) * 100,
     );
   };
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   if (loading) {
@@ -115,7 +123,8 @@ const PracticePage = () => {
             </span>
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-            Master coding interviews with LeetCode Blind 75 - the most essential problems
+            Master coding interviews with LeetCode Blind 75 - the most essential
+            problems
           </p>
         </motion.div>
 
@@ -160,10 +169,16 @@ const PracticePage = () => {
           {/* Results Info */}
           <div className="text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredProblems.length)} of {filteredProblems.length} problems
+              Showing {startIndex + 1}-
+              {Math.min(endIndex, filteredProblems.length)} of{" "}
+              {filteredProblems.length} problems
               {searchQuery && (
                 <span className="ml-2">
-                  for "<span className="font-medium text-orange-600 dark:text-orange-400">{searchQuery}</span>"
+                  for "
+                  <span className="font-medium text-orange-600 dark:text-orange-400">
+                    {searchQuery}
+                  </span>
+                  "
                 </span>
               )}
             </p>
@@ -212,7 +227,9 @@ const PracticePage = () => {
                     </div>
                     <div className="flex items-center gap-1">
                       <CheckCircle className="h-3 w-3" />
-                      <span>{getAcceptanceRate(problem.stats)}% Acceptance</span>
+                      <span>
+                        {getAcceptanceRate(problem.stats)}% Acceptance
+                      </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Users className="h-3 w-3" />
@@ -271,40 +288,42 @@ const PracticePage = () => {
               </button>
 
               {/* Page Numbers */}
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                if (
-                  page === 1 ||
-                  page === totalPages ||
-                  (page >= currentPage - 1 && page <= currentPage + 1)
-                ) {
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => handlePageChange(page)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                        currentPage === page
-                          ? "bg-orange-600 text-white shadow-lg"
-                          : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                } else if (
-                  page === currentPage - 2 ||
-                  page === currentPage + 2
-                ) {
-                  return (
-                    <span
-                      key={page}
-                      className="px-2 py-2 text-gray-400 dark:text-gray-600"
-                    >
-                      ...
-                    </span>
-                  );
-                }
-                return null;
-              })}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => {
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                          currentPage === page
+                            ? "bg-orange-600 text-white shadow-lg"
+                            : "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (
+                    page === currentPage - 2 ||
+                    page === currentPage + 2
+                  ) {
+                    return (
+                      <span
+                        key={page}
+                        className="px-2 py-2 text-gray-400 dark:text-gray-600"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return null;
+                },
+              )}
 
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
@@ -330,7 +349,9 @@ const PracticePage = () => {
               No problems found
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
-              {searchQuery ? "Try adjusting your search query" : "Try adjusting your filter to see more problems."}
+              {searchQuery
+                ? "Try adjusting your search query"
+                : "Try adjusting your filter to see more problems."}
             </p>
             {searchQuery && (
               <button

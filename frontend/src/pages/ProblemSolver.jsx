@@ -92,9 +92,12 @@ public class Solution {
 
   const fetchProblem = async () => {
     try {
-      const response = await fetch(
-        `https://compiler-design.onrender.com/api/problems/${slug}`
-      );
+      const API_URL =
+        window.location.hostname === "localhost"
+          ? "http://localhost:5000"
+          : "https://compiler-design.onrender.com";
+
+      const response = await fetch(`${API_URL}/api/problems/${slug}`);
       const data = await response.json();
       setProblem(data);
       if (data.starterCode && data.starterCode.javascript) {
@@ -108,13 +111,6 @@ public class Solution {
   };
 
   const handleRun = async () => {
-    // Check if user is logged in
-    if (!user) {
-      toast.error("You need to be logged in to run code");
-      setAuthModalOpen(true);
-      return;
-    }
-
     if (!code.trim()) {
       toast.error("Please write some code before running!");
       return;
@@ -124,17 +120,26 @@ public class Solution {
     setTestResults(null);
 
     try {
-      const response = await fetch(
-        `https://compiler-design.onrender.com/api/problems/${slug}/run`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({ code, language }),
-        }
-      );
+      const API_URL =
+        window.location.hostname === "localhost"
+          ? "http://localhost:5000"
+          : "https://compiler-design.onrender.com";
+
+      const headers = {
+        "Content-Type": "application/json",
+      };
+
+      // Add auth token if user is logged in (optional)
+      const token = localStorage.getItem("token");
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_URL}/api/problems/${slug}/run`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ code, language }),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -160,13 +165,6 @@ public class Solution {
   };
 
   const handleSubmit = async () => {
-    // Check if user is logged in
-    if (!user) {
-      toast.error("You need to be logged in to submit solutions");
-      setAuthModalOpen(true);
-      return;
-    }
-
     if (!code.trim()) {
       toast.error("Please write some code before submitting!");
       return;
@@ -176,17 +174,26 @@ public class Solution {
     setTestResults(null);
 
     try {
-      const response = await fetch(
-        `https://compiler-design.onrender.com/api/problems/${slug}/submit`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({ code, language }),
-        }
-      );
+      const API_URL =
+        window.location.hostname === "localhost"
+          ? "http://localhost:5000"
+          : "https://compiler-design.onrender.com";
+
+      const headers = {
+        "Content-Type": "application/json",
+      };
+
+      // Add auth token if user is logged in (optional)
+      const token = localStorage.getItem("token");
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_URL}/api/problems/${slug}/submit`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ code, language }),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -198,11 +205,11 @@ public class Solution {
       // Show success/failure toast
       if (result.success) {
         toast.success(
-          "Solution submitted successfully! All test cases passed."
+          "Solution submitted successfully! All test cases passed.",
         );
       } else {
         toast.error(
-          `Solution failed: ${result.passedTests}/${result.totalTests} test cases passed.`
+          `Solution failed: ${result.passedTests}/${result.totalTests} test cases passed.`,
         );
       }
     } catch (error) {
@@ -461,8 +468,8 @@ public class Solution {
                       {language === "javascript"
                         ? "ES6+"
                         : language === "cpp"
-                        ? "C++17"
-                        : "Java 15"}
+                          ? "C++17"
+                          : "Java 15"}
                     </span>
                   </div>
 
@@ -494,8 +501,8 @@ public class Solution {
                       {isRunning
                         ? "Running..."
                         : !user
-                        ? "Run Code (Login Required)"
-                        : "Run Code"}
+                          ? "Run Code (Login Required)"
+                          : "Run Code"}
                     </button>
                     <button
                       onClick={handleSubmit}
@@ -511,8 +518,8 @@ public class Solution {
                       {isSubmitting
                         ? "Submitting..."
                         : !user
-                        ? "Submit (Login Required)"
-                        : "Submit Solution"}
+                          ? "Submit (Login Required)"
+                          : "Submit Solution"}
                     </button>
                   </div>
                 </div>

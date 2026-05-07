@@ -18,13 +18,88 @@ router.get("/", async (req, res) => {
         tags: 1,
         stats: 1,
         _id: 1,
-      }
+      },
     ).sort({ createdAt: -1 });
 
     res.json(problems);
   } catch (error) {
     console.error("Error fetching problems:", error);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Execute code endpoint for collaboration (no auth required for collaboration rooms)
+// IMPORTANT: This must come BEFORE /:slug routes to avoid route collision
+router.post("/execute", async (req, res) => {
+  try {
+    const { language, code, input = "" } = req.body;
+
+    if (!code || !code.trim()) {
+      return res.status(400).json({ message: "Code is required" });
+    }
+
+    // Get language config and execute code
+    const config = pistonAPI.getLanguageConfig(language);
+    const result = await pistonAPI.executeCode(
+      config.language,
+      config.version,
+      code,
+      input,
+    );
+
+    console.log("Execute result:", result);
+
+    // Check for API errors
+    if (result.error || (result.statusCode && result.statusCode !== 200)) {
+      return res.json({
+        success: false,
+        output: result.error || result.output || "Execution failed",
+        error: result.error || `API Error: ${result.statusCode}`,
+      });
+    }
+
+    // Return the output
+    res.json({
+      success: true,
+      output: result.output || "",
+      cpuTime: result.cpuTime,
+      memory: result.memory,
+    });
+  } catch (error) {
+    console.error("Code execution error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Code execution failed",
+      error: error.message,
+      output: `Error: ${error.message}`,
+    });
+  }
+});
+
+// Test endpoint for JDoodle API
+router.post("/test-execution", async (req, res) => {
+  try {
+    const { language, code, input, expectedOutput } = req.body;
+
+    if (!code || !code.trim()) {
+      return res.status(400).json({ message: "Code is required" });
+    }
+
+    const testCase = { input, expectedOutput };
+    const result = await pistonAPI.runTestCase(
+      language,
+      code,
+      input,
+      expectedOutput,
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error("Test execution error:", error);
+    res.status(500).json({
+      message: "Test execution failed",
+      error: error.message,
+    });
   }
 });
 
@@ -50,8 +125,8 @@ router.get("/:slug", async (req, res) => {
   }
 });
 
-// Submit solution
-router.post("/:slug/submit", auth, async (req, res) => {
+// Submit solution (no auth required for practice)
+router.post("/:slug/submit", async (req, res) => {
   try {
     const { code, language } = req.body;
     const problem = await Problem.findOne({ slug: req.params.slug });
@@ -68,12 +143,43 @@ router.post("/:slug/submit", auth, async (req, res) => {
     }
 
     try {
-      // Execute code using Piston API
-      const executionResult = await pistonAPI.runAllTestCases(
-        language,
-        code,
-        allTestCases
-      );
+      // Use different execution methods based on language
+      let executionResult;
+
+      if (language === "javascript") {
+        // Use isolated-vm executor for JavaScript (handles function-only code)
+        const results = [];
+        let passedTests = 0;
+
+        for (const testCase of allTestCases) {
+          const result = await executeJavaScript(code, testCase);
+          if (result.passed) {
+            passedTests++;
+          }
+          results.push({
+            passed: result.passed,
+            input: result.input,
+            expectedOutput: result.expectedOutput,
+            actualOutput: result.actualOutput,
+            error: result.error,
+            isHidden: testCase.isHidden || false,
+          });
+        }
+
+        executionResult = {
+          success: passedTests === allTestCases.length,
+          passedTests,
+          totalTests: allTestCases.length,
+          results,
+        };
+      } else {
+        // Use JDoodle API for other languages (requires complete programs)
+        executionResult = await pistonAPI.runAllTestCases(
+          language,
+          code,
+          allTestCases,
+        );
+      }
 
       const success = executionResult.success;
 
@@ -82,37 +188,66 @@ router.post("/:slug/submit", auth, async (req, res) => {
       if (success) {
         problem.stats.acceptedSubmissions += 1;
 
-        // Update user's solved problems and stats
-        const User = require("../models/User");
-        const user = await User.findById(req.user.userId);
-
-        if (user) {
-          // Check if problem is already solved
-          const alreadySolved = user.problemsSolved.some(
-            (solved) => solved.problemId.toString() === problem._id.toString()
-          );
-
-          if (!alreadySolved) {
-            // Add to solved problems
-            user.problemsSolved.push({
-              problemId: problem._id,
-              solution: code,
-              language: language,
-              solvedAt: new Date(),
-            });
-
-            // Update stats
-            user.stats.totalProblems += 1;
-
-            if (problem.difficulty === "Easy") {
-              user.stats.easyProblems += 1;
-            } else if (problem.difficulty === "Medium") {
-              user.stats.mediumProblems += 1;
-            } else if (problem.difficulty === "Hard") {
-              user.stats.hardProblems += 1;
+        // Update user's solved problems and stats (if logged in)
+        // Check for optional authentication
+        const token = req.header("Authorization")?.replace("Bearer ", "");
+        if (token) {
+          try {
+            const jwt = require("jsonwebtoken");
+            let decoded;
+            try {
+              decoded = jwt.verify(
+                token,
+                process.env.JWT_SECRET || "fallback_secret",
+                { issuer: "prepmate-api", audience: "prepmate-client" },
+              );
+            } catch (err) {
+              // Fallback for older tokens
+              decoded = jwt.verify(
+                token,
+                process.env.JWT_SECRET || "fallback_secret",
+              );
             }
 
-            await user.save();
+            const User = require("../models/User");
+            const user = await User.findById(decoded.userId);
+
+            if (user) {
+              // Check if problem is already solved
+              const alreadySolved = user.problemsSolved.some(
+                (solved) =>
+                  solved.problemId.toString() === problem._id.toString(),
+              );
+
+              if (!alreadySolved) {
+                // Add to solved problems
+                user.problemsSolved.push({
+                  problemId: problem._id,
+                  solution: code,
+                  language: language,
+                  solvedAt: new Date(),
+                });
+
+                // Update stats
+                user.stats.totalProblems += 1;
+
+                if (problem.difficulty === "Easy") {
+                  user.stats.easyProblems += 1;
+                } else if (problem.difficulty === "Medium") {
+                  user.stats.mediumProblems += 1;
+                } else if (problem.difficulty === "Hard") {
+                  user.stats.hardProblems += 1;
+                }
+
+                await user.save();
+              }
+            }
+          } catch (authError) {
+            // Silently ignore auth errors - user stats won't be updated but code will still run
+            console.log(
+              "Optional auth failed, continuing without user tracking:",
+              authError.message,
+            );
           }
         }
       }
@@ -148,8 +283,8 @@ router.post("/:slug/submit", auth, async (req, res) => {
   }
 });
 
-// Run code with sample test cases only
-router.post("/:slug/run", auth, async (req, res) => {
+// Run code with sample test cases only (no auth required for practice)
+router.post("/:slug/run", async (req, res) => {
   try {
     const { code, language } = req.body;
     const problem = await Problem.findOne({ slug: req.params.slug });
@@ -166,12 +301,43 @@ router.post("/:slug/run", auth, async (req, res) => {
     }
 
     try {
-      // Execute code using Piston API for sample test cases
-      const executionResult = await pistonAPI.runAllTestCases(
-        language,
-        code,
-        sampleTestCases
-      );
+      // Use different execution methods based on language
+      let executionResult;
+
+      if (language === "javascript") {
+        // Use isolated-vm executor for JavaScript (handles function-only code)
+        const results = [];
+        let passedTests = 0;
+
+        for (const testCase of sampleTestCases) {
+          const result = await executeJavaScript(code, testCase);
+          if (result.passed) {
+            passedTests++;
+          }
+          results.push({
+            passed: result.passed,
+            input: result.input,
+            expectedOutput: result.expectedOutput,
+            actualOutput: result.actualOutput,
+            error: result.error,
+            isHidden: testCase.isHidden || false,
+          });
+        }
+
+        executionResult = {
+          success: passedTests === sampleTestCases.length,
+          passedTests,
+          totalTests: sampleTestCases.length,
+          results,
+        };
+      } else {
+        // Use JDoodle API for other languages (requires complete programs)
+        executionResult = await pistonAPI.runAllTestCases(
+          language,
+          code,
+          sampleTestCases,
+        );
+      }
 
       res.json({
         success: executionResult.success,
@@ -189,33 +355,6 @@ router.post("/:slug/run", auth, async (req, res) => {
   } catch (error) {
     console.error("Error running code:", error);
     res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Test endpoint for Piston API
-router.post("/test-execution", async (req, res) => {
-  try {
-    const { language, code, input, expectedOutput } = req.body;
-
-    if (!code || !code.trim()) {
-      return res.status(400).json({ message: "Code is required" });
-    }
-
-    const testCase = { input, expectedOutput };
-    const result = await pistonAPI.runTestCase(
-      language,
-      code,
-      input,
-      expectedOutput
-    );
-
-    res.json(result);
-  } catch (error) {
-    console.error("Test execution error:", error);
-    res.status(500).json({
-      message: "Test execution failed",
-      error: error.message,
-    });
   }
 });
 
